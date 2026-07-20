@@ -1,0 +1,67 @@
+#!/usr/bin/env python3
+"""pre-push — git hook: refuse to push if any skill fails the review gate.
+
+Install (symlink, so it tracks the source of truth):
+  ln -sf ../../shared/review-gate/pre-push .git/hooks/pre-push
+
+Git runs this from the repo top-level and streams "<local ref> <local sha>
+<remote ref> <remote sha>" lines on stdin (ignored here — we gate on working-
+tree content, not refs). Finds every skill in the repo and runs the same
+`check` the CLI does; exits 1 (blocking the push) if ANY skill is unattested
+or has drifted since review, printing which. STDLIB ONLY.
+"""
+import sys, os
+
+
+def _import_lib():
+    """Import review_gate from this hook's REAL directory (resolves the symlink)."""
+    here = os.path.dirname(os.path.realpath(__file__))
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    import review_gate
+    return review_gate
+
+
+def find_skills_recursive(rg, root):
+    """Every skill dir anywhere under root (git hooks may sit above nested skills)."""
+    skills = []
+    for cur, dirs, _files in os.walk(root):
+        dirs[:] = [d for d in dirs if d not in rg.EXCLUDE_DIRS and d != ".git"]
+        if cur != root and rg.is_skill_dir(cur):
+            skills.append(cur)
+    return sorted(set(skills))
+
+
+def main():
+    _ = sys.stdin.read()                                # drain git's ref list; unused
+    root = os.getcwd()                                  # git runs hooks at repo top-level
+    try:
+        rg = _import_lib()
+        tiers = rg.load_tiers()
+    except Exception as e:
+        # A pre-push hook is a hard gate: if we cannot even load the checker,
+        # refuse the push rather than wave through unreviewed content.
+        print("[review-gate] pre-push: cannot run review check (%s) — push blocked." % e,
+              file=sys.stderr)
+        return 1
+
+    failures = []
+    for skill_dir in find_skills_recursive(rg, root):
+        ok, reason = rg.check(skill_dir, tiers)
+        name = os.path.relpath(skill_dir, root)
+        if not ok:
+            failures.append((name, reason))
+
+    if failures:
+        print("[review-gate] pre-push BLOCKED — %d skill(s) fail the review gate:"
+              % len(failures), file=sys.stderr)
+        for name, reason in failures:
+            print("  - %s: %s" % (name, reason), file=sys.stderr)
+        print("Run the adversarial review and review_gate.py attest before pushing.",
+              file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

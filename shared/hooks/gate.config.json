@@ -1,0 +1,13 @@
+{
+  "_comment": "STOP-hook critique gate. Blocks ending a turn while any record is built-but-not-critiqued. CWD-relative record globs, so one wiring covers whichever project is active. Add a gate entry per skill/project that has a critique gate. See DESIGN.md.",
+
+  "gates": [
+    {
+      "name": "tailor-artifacts critique gate",
+      "records_glob": "records/*.json",
+      "status_field": "status",
+      "pending_statuses": ["Built - pending critique"],
+      "remediation": "python3 tailor.py critique"
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+# skill-factory — commit the docs, hooks, and code that DEFINE the project.
+# Everything below is local, generated, transient, or junk.
+
+# Local / machine-specific settings (Claude Code convention — settings.json is shared, .local is not)
+.claude/settings.local.json
+
+# Raw adversarial-review dumps (transient). The curated REVIEW-FINDINGS.md IS committed as the record.
+builds/*/reviews/
+
+# Upstream reference material — the job-search pipeline this factory was abstracted FROM.
+# Holds pointers to the source's real Sheet IDs + service-account key; NEVER publish it.
+source/
+
+# Secrets (defensive — none live in this repo today; keep it that way).
+# A PreToolUse secret_guard also denies write/commit/reference of the source's key + sheet ids.
+.env
+*.key
+credentials.json
+service_account*.json
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Environments (defensive)
+.venv/
+venv/
+env/
+node_modules/
+
+# OS / editor junk
+.DS_Store
+*.swp
+*~
+
+# NOTE — do NOT ignore these; they are review PROOF and must travel with the skill:
+#   .review-attestation.json   (hash-keyed pass proof; a fresh clone verifies against it)
+#   .review-history.jsonl      (append-only review audit trail)

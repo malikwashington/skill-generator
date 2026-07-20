@@ -1,0 +1,50 @@
+{
+  "_comment": "Guard config for this skill deployment. The script ALSO enforces a hardcoded safety floor even if this file is missing or broken. JSON (not YAML) on purpose: the hook runs under bare system python with no third-party deps. See guard-hook-layer-design.md.",
+
+  "_attestation_comment": "Gives review_gate.py a door: denies shipping a skill whose hash-keyed full review has not passed. Narrow — silent unless the call really is a ship (a write into install_root, or a ship-shaped Bash command that names a skill or runs inside a skills_root). Fail-CLOSED on the ship path. Separately, the hardcoded FLOOR denies hand-writing any .review-attestation.json / .review-history.jsonl / .egress-lint-attestation.json: those have exactly one writer.",
+  "attestation_guard": {
+    "decision": "deny",
+    "review_gate": "~/Desktop/skill-generator/shared/review-gate/review_gate.py",
+    "skills_roots": ["~/Desktop/skills"],
+    "install_root": "~/.claude/skills",
+    "ship_bash_patterns": [
+      "\\bgit\\s+push\\b",
+      "\\b(cp|rsync|install|ln)\\b[^\\n]*\\.claude/skills",
+      "\\bnpm\\s+publish\\b",
+      "\\bgh\\s+release\\s+create\\b"
+    ]
+  },
+
+  "secret_guard": {
+    "decision": "deny",
+    "protected_paths": [
+      "sheets-creds.json",
+      "*service-account*.json",
+      "*.pem",
+      "id_rsa",
+      ".sheet_id"
+    ]
+  },
+
+  "send_guard": {
+    "decision": "deny",
+    "allow_drafts": true,
+    "blocked_tools": [
+      "mcp__claude_ai_Gmail__send_message"
+    ],
+    "blocked_bash_patterns": [
+      "curl\\b.*\\b(apply|application|submit)\\b",
+      "gh pr create"
+    ]
+  },
+
+  "data_guard": {
+    "decision": "ask",
+    "protected_paths": [
+      "profile.yaml",
+      "*/pack.yaml",
+      "*/rubric.yaml",
+      "*/profile.yaml"
+    ]
+  }
+}

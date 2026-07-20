@@ -1,0 +1,36 @@
+---
+name: <skill-name>
+description: <one line — what it does AND when to invoke it (the trigger the model matches on)>
+---
+
+# <Skill Name>
+
+<One paragraph: what / why. The value in one breath. Grounded voice — no superlatives.>
+
+## When to use
+<Concrete trigger conditions — when the model should activate this skill.>
+
+## The rules (contract)
+1. <source-of-state: the JSON record is truth; projections are derived from it>
+2. <dedup: never reprocess an item that already has a record>
+3. <human gate: stop before any irreversible action; a human acts>
+4. <tuning/personal logic lives in USER DATA (the profile/config), never in code or prompts>
+5. <flat, predictable paths; one canonical artifact path that the generator writes and recorder reads>
+
+## One-time setup
+<deps; `cp <inputs>.example <inputs>` then fill in YOUR data; preflight + any network gotchas>
+
+## Run order
+```
+# 1. emit      -> writes requests.json  (each request carries its own instructions + response_schema)
+# 2. JUDGE     -> read requests.json, follow its embedded instructions + schema, write responses.json
+#                 (any judge: Claude Code subagents / API / local model / human; fan out for volume,
+#                  run N× + average or add an adversarial-verify pass for reliability)
+# 3. ingest    -> VALIDATE (decode/shape/schema, auto-unwrap, fail-loud on zero-valid), merge,
+#                 threshold -> outputs + source-of-state record
+# 4. STOP at Ready-for-Review (a human gates the action)
+```
+
+## Principles (standing instructions to the judge — GENERIC, never person-specific)
+<the interpretive method / scoring criteria / tailoring method / truth-guardrail — written so they
+apply to ANY user, with all individual tuning coming from the user's profile/config data>

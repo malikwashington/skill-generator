@@ -1,0 +1,8 @@
+{
+  "_comment": "Review-tier bars enforced by review_gate.check(). A tier maps to the minimum bar a PASSING attestation must clear: verdict, ceiling on confirmed findings, and (optionally) an allow-list of review_verdict strings. Override the path with env REVIEW_TIERS. See review_gate.py.",
+
+  "trivial":  {"min_verdict": "pass", "max_confirmed_findings": 9999, "note": "any passing attestation"},
+  "standard": {"min_verdict": "pass", "max_confirmed_findings": 3},
+  "high":     {"min_verdict": "pass", "max_confirmed_findings": 0, "require_review_verdict_in": ["solid-with-fixes"]},
+  "critical": {"min_verdict": "pass", "max_confirmed_findings": 0, "require_review_verdict_in": ["solid-with-fixes"]}
+}
