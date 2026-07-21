@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A systems map of an LLM-judgment pipeline: one emit-judge-ingest pattern refined into two dozen capabilities, three of them public and runnable.">
+<title>Ecosystem Map — LLM-judgment pipeline</title>
+</head>
+<body>
+<style>
+  :root {
+    --ground:#f4f6f5; --panel:#ffffff; --panel-2:#fbfbfa;
+    --ink:#17212a; --muted:#5b6a74; --faint:#8695a0;
+    --line:#e3e8e8; --line-2:#eef1f1;
+    --gold:#a9741a; --gold-ink:#8c5f12; --gold-soft:rgba(169,116,26,.10); --gold-ring:rgba(169,116,26,.34);
+    --steel:#3f6b7d; --steel-soft:rgba(63,107,125,.09);
+    --shadow:0 1px 2px rgba(20,30,38,.05), 0 8px 26px rgba(20,30,38,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:#0e1317; --panel:#151c22; --panel-2:#121820;
+      --ink:#e7ecef; --muted:#8b98a3; --faint:#6a7883;
+      --line:#232d35; --line-2:#1b232b;
+      --gold:#d9a94e; --gold-ink:#e7bf6f; --gold-soft:rgba(217,169,78,.13); --gold-ring:rgba(217,169,78,.34);
+      --steel:#7fa6ba; --steel-soft:rgba(127,166,186,.11);
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.32);
+    }
+  }
+  :root[data-theme="light"] {
+    --ground:#f4f6f5; --panel:#ffffff; --panel-2:#fbfbfa;
+    --ink:#17212a; --muted:#5b6a74; --faint:#8695a0;
+    --line:#e3e8e8; --line-2:#eef1f1;
+    --gold:#a9741a; --gold-ink:#8c5f12; --gold-soft:rgba(169,116,26,.10); --gold-ring:rgba(169,116,26,.34);
+    --steel:#3f6b7d; --steel-soft:rgba(63,107,125,.09);
+    --shadow:0 1px 2px rgba(20,30,38,.05), 0 8px 26px rgba(20,30,38,.06);
+  }
+  :root[data-theme="dark"] {
+    --ground:#0e1317; --panel:#151c22; --panel-2:#121820;
+    --ink:#e7ecef; --muted:#8b98a3; --faint:#6a7883;
+    --line:#232d35; --line-2:#1b232b;
+    --gold:#d9a94e; --gold-ink:#e7bf6f; --gold-soft:rgba(217,169,78,.13); --gold-ring:rgba(217,169,78,.34);
+    --steel:#7fa6ba; --steel-soft:rgba(127,166,186,.11);
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.32);
+  }
+
+  * { box-sizing:border-box; }
+  html { -webkit-text-size-adjust:100%; }
+  body {
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:16px; line-height:1.6; letter-spacing:-.003em;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono { font-family:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,"Liberation Mono",monospace; }
+
+  .wrap { max-width:1080px; margin:0 auto; padding:0 24px; }
+  .prose { max-width:660px; }
+
+  .eyebrow {
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    font-size:12px; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--steel); font-weight:600;
+  }
+
+  /* ---- hero ---- */
+  header { padding:88px 0 44px; border-bottom:1px solid var(--line); }
+  .kernel {
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    font-weight:600; line-height:1.15; margin:22px 0 0;
+    font-size:clamp(30px,6vw,58px); letter-spacing:-.01em;
+    text-wrap:balance;
+  }
+  .kernel .arrow { color:var(--gold); font-weight:500; padding:0 .12em; }
+  .kernel .j { color:var(--gold-ink); }
+  h1.sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+  .thesis {
+    margin:26px 0 0; font-size:clamp(17px,2.2vw,20px); line-height:1.55;
+    color:var(--ink); max-width:720px; text-wrap:pretty;
+  }
+  .thesis b { color:var(--gold-ink); font-weight:600; }
+  .thesis .code { color:var(--steel); font-weight:600; }
+
+  .stats { display:flex; flex-wrap:wrap; gap:14px 40px; margin-top:34px; align-items:baseline; }
+  .stat .n {
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    font-size:34px; font-weight:600; color:var(--ink); line-height:1;
+    font-variant-numeric:tabular-nums;
+  }
+  .stat .n.g { color:var(--gold); }
+  .stat .l { display:block; margin-top:7px; font-size:12.5px; color:var(--muted); letter-spacing:.01em; }
+
+  .legend { display:flex; flex-wrap:wrap; gap:10px 20px; margin-top:30px; }
+  .lg { display:inline-flex; align-items:center; gap:8px; font-size:12.5px; color:var(--muted); }
+  .dot { width:9px; height:9px; border-radius:50%; flex:none; }
+  .dot.pub { background:var(--gold); box-shadow:0 0 0 3px var(--gold-soft); }
+  .dot.prv { background:transparent; border:1.5px solid var(--faint); }
+
+  /* ---- section scaffolding ---- */
+  section { padding:52px 0; border-bottom:1px solid var(--line-2); }
+  .band-head { display:flex; align-items:baseline; gap:16px; margin-bottom:6px; }
+  .band-head .no {
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    font-size:13px; font-weight:600; color:var(--gold); letter-spacing:.06em;
+    font-variant-numeric:tabular-nums;
+  }
+  .band-head h2 { margin:0; font-size:23px; letter-spacing:-.015em; font-weight:650; text-wrap:balance; }
+  .band-sub { margin:2px 0 26px; color:var(--muted); font-size:14.5px; max-width:640px; }
+
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(255px,1fr)); gap:14px; }
+
+  .cap {
+    background:var(--panel); border:1px solid var(--line); border-radius:11px;
+    padding:16px 17px 15px; display:flex; flex-direction:column; gap:7px;
+    box-shadow:var(--shadow); position:relative; min-width:0;
+  }
+  .cap .name {
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    font-size:14px; font-weight:600; color:var(--ink); letter-spacing:-.01em;
+    word-break:break-word;
+  }
+  .cap .desc { font-size:13px; line-height:1.5; color:var(--muted); }
+  .cap .chip {
+    align-self:flex-start; margin-top:2px; font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; font-weight:600;
+    padding:3px 8px; border-radius:5px; border:1px solid var(--line); color:var(--faint);
+  }
+  a.cap { text-decoration:none; }
+  .cap.pub {
+    border-color:var(--gold-ring); background:linear-gradient(180deg,var(--gold-soft),transparent 60%),var(--panel);
+  }
+  .cap.pub .name { color:var(--gold-ink); }
+  .cap.pub .chip { color:var(--gold); border-color:var(--gold-ring); background:var(--gold-soft); }
+  .cap.pub .chip::after { content:" \2197"; }
+  a.cap.pub:hover { border-color:var(--gold); }
+  a.cap.pub:hover .name { text-decoration:underline; text-underline-offset:2px; }
+  a.cap:focus-visible { outline:2px solid var(--gold); outline-offset:3px; }
+
+  /* spine cards read a touch wider/quieter */
+  .spine .grid { grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); }
+
+  /* ---- exemplars ---- */
+  .ex { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:16px; margin-top:6px; }
+  .repo {
+    display:flex; flex-direction:column; gap:9px; text-decoration:none; color:inherit;
+    background:linear-gradient(180deg,var(--gold-soft),transparent 55%),var(--panel);
+    border:1px solid var(--gold-ring); border-radius:13px; padding:20px 20px 18px;
+    box-shadow:var(--shadow); transition:border-color .15s ease, transform .15s ease;
+  }
+  .repo:hover { border-color:var(--gold); transform:translateY(-2px); }
+  .repo:focus-visible { outline:2px solid var(--gold); outline-offset:3px; }
+  @media (prefers-reduced-motion:reduce) { .repo, .repo:hover { transition:none; transform:none; } }
+  .repo .rn {
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-weight:600; font-size:16px;
+    color:var(--gold-ink); display:flex; align-items:center; gap:8px;
+  }
+  .repo .rn .ar { color:var(--gold); font-weight:400; }
+  .repo .rd { font-size:13.5px; color:var(--muted); line-height:1.5; }
+  .repo .rmap { margin-top:auto; font-size:12px; color:var(--faint); }
+  .repo .rmap b { color:var(--steel); font-weight:600; }
+
+  /* ---- footer ---- */
+  footer { padding:48px 0 76px; border-bottom:none; }
+  .note { max-width:660px; color:var(--muted); font-size:14.5px; line-height:1.65; }
+  .note b { color:var(--ink); font-weight:600; }
+  .note + .note { margin-top:14px; }
+
+  /* the profile — first-class artifact at the center */
+  .hub { padding:46px 0; border-bottom:1px solid var(--line-2); }
+  .hub-card {
+    background:linear-gradient(180deg,var(--gold-soft),transparent 68%),var(--panel);
+    border:1px solid var(--gold-ring); border-radius:14px; padding:26px 28px; box-shadow:var(--shadow);
+  }
+  .hub-card .eyebrow { color:var(--gold); }
+  .hub-card h2 { margin:8px 0 8px; font-size:24px; letter-spacing:-.02em; }
+  .hub-card .lead { margin:0; color:var(--ink); font-size:15.5px; line-height:1.62; max-width:700px; }
+  .hub-card .lead b { color:var(--gold-ink); font-weight:600; }
+  .hub-card .lead em { font-style:normal; color:var(--steel); font-weight:600; }
+
+  /* honest threat-model boundary */
+  .limit {
+    margin-top:26px; border:1px solid var(--line); border-left:3px solid var(--steel);
+    background:var(--steel-soft); border-radius:0 11px 11px 0; padding:17px 20px;
+  }
+  .limit .lbl {
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:11px; letter-spacing:.15em;
+    text-transform:uppercase; color:var(--steel); font-weight:600; display:block; margin-bottom:7px;
+  }
+  .limit p { margin:0; font-size:13.5px; line-height:1.62; color:var(--muted); }
+  .limit p b { color:var(--ink); font-weight:600; }
+  .limit p em { font-style:italic; color:var(--ink); }
+
+  .fade { opacity:0; transform:translateY(8px); animation:rise .7s cubic-bezier(.2,.7,.2,1) forwards; }
+  .fade:nth-child(2){animation-delay:.05s}.fade:nth-child(3){animation-delay:.1s}
+  @keyframes rise { to { opacity:1; transform:none; } }
+  @media (prefers-reduced-motion:reduce) { .fade { animation:none; opacity:1; transform:none; } }
+
+  @media (max-width:560px) {
+    header { padding:60px 0 36px; }
+    section { padding:40px 0; }
+    .band-head { gap:11px; }
+  }
+</style>
+
+<header>
+  <div class="wrap">
+    <h1 class="sr">LLM-judgment pipeline — ecosystem map</h1>
+    <div class="eyebrow fade">System map</div>
+    <div class="kernel fade">emit<span class="arrow">→</span><span class="j">judge</span><span class="arrow">→</span>ingest</div>
+    <p class="thesis fade">One pattern, refined over months into a full pipeline. <span class="code">Deterministic code</span> owns state, safety, and merging; <b>LLM judges</b> make the fuzzy calls behind a validated contract; a human gates every consequential action. Every stage below is the same kernel pointed at a different decision.</p>
+
+    <div class="stats fade">
+      <div class="stat"><span class="n">25</span><span class="l">capabilities in the system</span></div>
+      <div class="stat"><span class="n g">3</span><span class="l">public, standalone, runnable</span></div>
+      <div class="stat"><span class="n">1</span><span class="l">pattern underneath all of it</span></div>
+    </div>
+
+    <div class="legend fade">
+      <span class="lg"><span class="dot pub"></span> Public &mdash; an open-source window into the system</span>
+      <span class="lg"><span class="dot prv"></span> Runs privately on my own data</span>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- THE PROFILE (hub) -->
+  <section class="hub">
+    <div class="wrap">
+      <div class="hub-card">
+        <div class="eyebrow">The artifact at the center</div>
+        <h2>The profile</h2>
+        <p class="lead">Everything turns on one artifact: a deep, living <b>profile</b> of who I am and what I've done. Every role is scored <em>against</em> it, every draft is tailored <em>from</em> it, every gap folds back <em>into</em> it. It is the single source of truth the whole system judges by &mdash; not a stage in the pipeline, but the substrate every stage runs on.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- TRUST SPINE -->
+  <section class="spine">
+    <div class="wrap">
+      <div class="band-head"><span class="no">00</span><h2>The trust spine</h2></div>
+      <p class="band-sub">What makes LLM judgment safe to build on. These primitives run under every stage &mdash; the reason a fabricated claim or a poisoned job description can't reach a document or take an action.</p>
+      <div class="grid">
+        <a class="cap pub" href="https://github.com/malikwashington/skill-generator" target="_blank" rel="noopener">
+          <span class="name">skill-generator</span>
+          <span class="desc">The governance that lets any of these be trusted: a hash-keyed review gate a skill can't ship without, plus fail-closed guards that hard-block send / submit / secret surfaces. The pipeline stops at the submit button, always.</span>
+          <span class="chip">Public</span>
+        </a>
+        <div class="cap">
+          <span class="name">provenance gate</span>
+          <span class="desc">JD-blind judges verify every synthesized claim entails from its source. A claim that traces to nothing is refused before it can reach a PDF.</span>
+          <span class="chip">Private</span>
+        </div>
+        <div class="cap">
+          <span class="name">confined judges</span>
+          <span class="desc">Scoring, tailoring, and critique run as read-only subagents behind a data fence, so untrusted job text can never hijack an agent that can act.</span>
+          <span class="chip">Private</span>
+        </div>
+        <div class="cap">
+          <span class="name">validate + average</span>
+          <span class="desc">Every judge response is schema-checked and rejected loud if off-contract; N independent runs are averaged and genuine disagreement is flagged, not smoothed away.</span>
+          <span class="chip">Private</span>
+        </div>
+      </div>
+      <div class="limit">
+        <span class="lbl">The threat model, honestly</span>
+        <p><b>These guards defend against untrusted <em>external</em> input</b> &mdash; a poisoned job description can't hijack a judge or reach a document. They do not defend against <b>me</b>: grounding proves a claim traces to the profile, not that the profile is <em>true</em>. The system was never designed or tested to catch an operator who misrepresents themselves &mdash; that integrity is the operator's to hold, by design.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 01 DISCOVER -->
+  <section>
+    <div class="wrap">
+      <div class="band-head"><span class="no">01</span><h2>Discover</h2></div>
+      <p class="band-sub">Find every role worth judging &mdash; from curated company boards out to a 51k-company harvested universe &mdash; without ever re-processing one twice.</p>
+      <div class="grid">
+        <div class="cap"><span class="name">multi-ATS pull</span><span class="desc">Eleven applicant-tracking systems normalized behind one contract: Greenhouse, Lever, Ashby, Workday, BambooHR, and more.</span><span class="chip">Private</span></div>
+        <div class="cap"><span class="name">seed &rarr; resolve &rarr; firehose</span><span class="desc">Turn a company name or a role lead into a real board by probing ATS slugs &mdash; discovery expansion beyond the boards you already know.</span><span class="chip">Private</span></div>
+        <div class="cap"><span class="name">source-independent dedup</span><span class="desc">Collapse the same posting seen across sources by company, title, location, and JD similarity &mdash; no double-count, no double-apply.</span><span class="chip">Private</span></div>
+        <div class="cap"><span class="name">de-listing + dead-board cache</span><span class="desc">Vanished postings close themselves; boards that 404 are remembered and skipped, so a huge universe stays cheap to re-pull.</span><span class="chip">Private</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 02 SCORE -->
+  <section>
+    <div class="wrap">
+      <div class="band-head"><span class="no">02</span><h2>Score</h2></div>
+      <p class="band-sub">Judge true fit from evidence, not keywords &mdash; then cancel the model's run-to-run noise before trusting the number.</p>
+      <div class="grid">
+        <div class="cap"><span class="name">interpretive fit</span><span class="desc">A four-dimension composite &mdash; must-haves, lane, seniority, nice-to-haves &mdash; reasoned from the whole profile, crediting transferable evidence.</span><span class="chip">Private</span></div>
+        <div class="cap"><span class="name">3&times; run-averaging</span><span class="desc">Score each role three times and average in code; a wide split is stamped a finding to re-judge, never averaged into false consensus.</span><span class="chip">Private</span></div>
+        <div class="cap"><span class="name">comp + near-miss gates</span><span class="desc">Hard comp floor with a graded near-miss band, so a role that misses on pay alone still surfaces for visibility instead of vanishing.</span><span class="chip">Private</span></div>
+        <div class="cap"><span class="name">false-negative audit</span><span class="desc">A monthly pass that scores everything the relevance gate dropped, catching a good role a hand-tuned regex would have silently filtered.</span><span class="chip">Private</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03 GROUND -->
+  <section>
+    <div class="wrap">
+      <div class="band-head"><span class="no">03</span><h2>Ground</h2></div>
+      <p class="band-sub">Grounding isn't one gate but a discipline applied wherever the system synthesizes: provenance holds each generated claim to entailment against its source; the coverage map holds the page to the terms it still needs to defend. Trust is layered, not a single checkpoint.</p>
+      <div class="grid">
+        <div class="cap"><span class="name">source entailment</span><span class="desc">Isolated judges see only the synthesized statement and its source lines &mdash; an informed judge rationalizes, an isolated one can only check entailment.</span><span class="chip">Private</span></div>
+        <div class="cap"><span class="name">grounded coverage map</span><span class="desc">Every skill and JD term cited to the exact bullet that homes it, or flagged uncited &mdash; so keep/drop decisions are grounded, never asserted.</span><span class="chip">Private</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 GENERATE -->
+  <section>
+    <div class="wrap">
+      <div class="band-head"><span class="no">04</span><h2>Generate</h2></div>
+      <p class="band-sub">Express the fit in the target's own language, then compose the strongest single page &mdash; the judge ranks by impact, the code measures the real page and fits it.</p>
+      <div class="grid">
+        <a class="cap pub" href="https://github.com/malikwashington/tailor-artifacts" target="_blank" rel="noopener">
+          <span class="name">tailor-artifacts</span>
+          <span class="desc">One personalized draft per target: proof points selected, the target's terms mirrored, anchor facts kept verbatim, a structural truth gate before review.</span>
+          <span class="chip">Public</span>
+        </a>
+        <div class="cap"><span class="name">compose</span><span class="desc">The judge ranks every bullet and section by impact; the code measures the rendered page and cuts only as far as the overflow requires &mdash; never stranding a JD term that is truthfully defensible by demonstrated experience.</span><span class="chip">Private</span></div>
+        <div class="cap"><span class="name">fill-to-page</span><span class="desc">An automatic loop that pulls the highest-value unused evidence into an under-filled page &mdash; strongest page within one page, decided by the judge.</span><span class="chip">Private</span></div>
+        <div class="cap"><span class="name">critique + blind screen</span><span class="desc">An informed critic gate and a cold blind reader who knows only the resume and the posting &mdash; two independent checks before Ready for Review.</span><span class="chip">Private</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05 DECIDE -->
+  <section>
+    <div class="wrap">
+      <div class="band-head"><span class="no">05</span><h2>Decide</h2></div>
+      <p class="band-sub">Fit answers "is this a match?" This layer answers the question that orders the week: if I act now, what's the probability it works, and what single move most raises the odds?</p>
+      <div class="grid">
+        <a class="cap pub" href="https://github.com/malikwashington/lna" target="_blank" rel="noopener">
+          <span class="name">lna</span>
+          <span class="desc">Likelihood plus next-action: P(success&nbsp;|&nbsp;act now), the one highest-leverage step, and the odds after it &mdash; ranked by where effort moves the needle most.</span>
+          <span class="chip">Public</span>
+        </a>
+        <div class="cap"><span class="name">interview likelihood</span><span class="desc">P(first-round interview&nbsp;|&nbsp;apply), judged distinct from fit &mdash; a perfect-fit role can be a long shot, a mediocre one a near-lock.</span><span class="chip">Private</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 06 TRACK -->
+  <section>
+    <div class="wrap">
+      <div class="band-head"><span class="no">06</span><h2>Track</h2></div>
+      <p class="band-sub">The filesystem is the system of record; every dashboard is a projection of it. State is authored once, mirrored everywhere.</p>
+      <div class="grid">
+        <div class="cap"><span class="name">durable records</span><span class="desc">One schema-validated JSON per posting is the source of state &mdash; scores, artifacts, and human status, with field-level ownership so nothing is written twice.</span><span class="chip">Private</span></div>
+        <div class="cap"><span class="name">dashboard projections</span><span class="desc">Shortlist, application funnel, near-misses, most-likely, and gap-roles sheets &mdash; all regenerated from the records, never a second source of truth.</span><span class="chip">Private</span></div>
+        <div class="cap"><span class="name">time-based triggers</span><span class="desc">Overdue and cold-lead nudges, plus interview-prep packs generated on a fresh gate stamp &mdash; all time logic in one place.</span><span class="chip">Private</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 07 LEARN -->
+  <section>
+    <div class="wrap">
+      <div class="band-head"><span class="no">07</span><h2>Learn &mdash; the loop closes</h2></div>
+      <p class="band-sub">The pipeline is a loop, not a line. Demand the scorer can't credit surfaces as a gap and splits two ways &mdash; a skill I'd <em>claim</em> but haven't yet <em>demonstrated</em> in the profile (flesh the profile out until the claim is defensible), versus one I genuinely lack (a growth target). Either way the profile stays a superset of demonstrated experience, and each cycle compounds.</p>
+      <div class="grid">
+        <div class="cap"><span class="name">gaps loop</span><span class="desc">Every term the scorer can't yet credit surfaces with demand evidence into a growth tracker (the Profile Gaps sheet) &mdash; the market's own signal, turned into a to-do list.</span><span class="chip">Private</span></div>
+        <div class="cap"><span class="name">claimed vs demonstrated</span><span class="desc">The distinction that drives the loop: a skill I'd claim but haven't shown gets written up with real evidence until it's defensible; a genuine gap becomes something to go build. The profile grows only on demonstrated truth, never assertion.</span><span class="chip">Private</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- EXEMPLARS -->
+  <section>
+    <div class="wrap">
+      <div class="band-head"><span class="no">&#9670;</span><h2>The three public windows</h2></div>
+      <p class="band-sub">Each is a standalone, open-source repo you can clone and run &mdash; the same machinery, rebuilt minimally with the personal data stripped out. Together they show the pattern end to end: govern it, tailor with it, decide with it.</p>
+      <div class="ex">
+        <a class="repo" href="https://github.com/malikwashington/skill-generator" target="_blank" rel="noopener">
+          <span class="rn">skill-generator <span class="ar">&#8599;</span></span>
+          <span class="rd">The factory and its governance &mdash; the review gate and fail-closed guards that let any of these skills be trusted. A skill isn't done until it passes.</span>
+          <span class="rmap">maps to &middot; <b>the trust spine</b></span>
+        </a>
+        <a class="repo" href="https://github.com/malikwashington/tailor-artifacts" target="_blank" rel="noopener">
+          <span class="rn">tailor-artifacts <span class="ar">&#8599;</span></span>
+          <span class="rd">One genuinely personalized artifact per target, with a structural truth gate that refuses any claim the profile can't support. Stops at Ready for Review &mdash; never sends.</span>
+          <span class="rmap">maps to &middot; <b>04 Generate</b></span>
+        </a>
+        <a class="repo" href="https://github.com/malikwashington/lna" target="_blank" rel="noopener">
+          <span class="rn">lna <span class="ar">&#8599;</span></span>
+          <span class="rd">A second-opinion decision layer: not "what's best" but where one action moves the needle most. Ranked by leverage, with reasoning attached.</span>
+          <span class="rmap">maps to &middot; <b>05 Decide</b></span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <p class="note"><b>Why only three are public.</b> The full pipeline runs privately on my own job search &mdash; my profile, my data, my decisions. What's open-source is a clean, standalone sample of the pattern, not the whole system. The depth is real; most of it just isn't mine to publish.</p>
+      <p class="note">Every capability above shares one contract: code owns state and safety, a judge makes the call behind a validated schema, and a human decides before anything irreversible. Build one well and the next is the same kernel pointed somewhere new &mdash; which is how 25 of them came to exist.</p>
+    </div>
+  </footer>
+</main>
+
+</body>
+</html>

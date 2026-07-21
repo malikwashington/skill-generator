@@ -90,3 +90,57 @@ The pattern, stated independent of any single use case:
   engine); the job-specific parts are a thin swappable "screening pack" — rubric compiler
   (JD → must-haves/disqualifiers), reader persona + calibration, artifact conventions, hard
   gates. Domain packs are data, not code.
+
+## E. The origin system, capability by capability
+Sections A–D describe the *general* shape. This is the *concrete* instance the abstraction was
+extracted from — the private job-search pipeline in full, so the pattern has a visible proving
+ground. **25 capabilities; three are the public repos above, the rest run privately on my own
+data.** It's a loop, not a line — the gaps it surfaces fold back into the profile, so each cycle
+compounds. ([Visual map →](https://malikwashington.github.io/skill-generator/).)
+
+**The profile is the hub** — the artifact every stage judges against, tailors from, and enriches;
+not a capability but the substrate they all operate on. The system's one honest boundary follows
+from that: the guards defend against untrusted *external* input, but grounding proves a claim
+traces to the profile, **not that the profile is true**. Catching a user who misrepresents
+*themselves* was never designed or tested for — that integrity is the operator's, by design.
+
+**Trust spine** — primitives that run under every stage:
+- **skill-generator** *(public)* — a hash-keyed review gate a skill can't ship without, plus fail-closed guards that hard-block send/submit/secret surfaces.
+- **provenance** — JD-blind judges verify every synthesized claim entails from its source; a fabrication can't reach a document.
+- **confined judges** — scoring, tailoring, and critique run read-only behind a data fence, so untrusted text can't hijack an agent that acts.
+- **validate + average** — every response is schema-checked and rejected loud if off-contract; N runs averaged, real disagreement flagged not smoothed.
+
+**01 · Discover** — find every role worth judging without re-processing one twice:
+- **multi-ATS pull** — eleven applicant-tracking systems normalized behind one contract.
+- **seed → resolve → firehose** — a company name or role lead becomes a real board by probing ATS slugs.
+- **source-independent dedup** — the same posting seen across sources collapses to one.
+- **de-listing + dead-board cache** — vanished postings self-close; 404 boards are remembered and skipped, so a huge universe stays cheap to re-pull.
+
+**02 · Score** — judge true fit from evidence, then cancel run-to-run noise:
+- **interpretive fit** — a four-dimension composite reasoned from the whole profile, crediting transferable evidence.
+- **3× run-averaging** — score three times and average in code; a wide split is a finding to re-judge, never averaged away.
+- **comp + near-miss gates** — a hard pay floor with a graded near-miss band, so a pay-only miss still surfaces.
+- **false-negative audit** — a monthly pass over everything the relevance gate dropped, catching a good role a hand-tuned regex filtered.
+
+**03 · Ground** — tie every assertion to the source:
+- **source entailment** — isolated judges see only the statement and its source lines; an informed judge rationalizes, an isolated one checks entailment.
+- **grounded coverage map** — every skill and JD term cited to the bullet that homes it, or flagged uncited, so keep/drop decisions are grounded.
+
+**04 · Generate** — express the fit, then compose the strongest single page:
+- **tailor-artifacts** *(public)* — one personalized draft per target with a structural truth gate; stops at Ready for Review.
+- **compose** — the judge ranks bullets and sections by impact; the code measures the rendered page and cuts only as far as the overflow requires, never stranding a JD term that is truthfully defensible by demonstrated experience.
+- **fill-to-page** — an automatic loop that pulls the highest-value unused evidence into an under-filled page.
+- **critique + blind screen** — an informed critic gate plus a cold reader who knows only the résumé and the posting.
+
+**05 · Decide** — not "is this a match?" but "if I act now, does it work, and what move helps most?":
+- **lna** *(public)* — likelihood + the single highest-leverage next action + the odds after it, ranked by leverage.
+- **interview likelihood** — P(first-round interview | apply), judged distinct from fit.
+
+**06 · Track** — the filesystem is the system of record; every dashboard is a projection:
+- **durable records** — one schema-validated JSON per posting, with field-level ownership so nothing is written twice.
+- **dashboard projections** — shortlist, funnel, near-misses, most-likely, gap-roles — all regenerated from the records.
+- **time-based triggers** — overdue/cold nudges and interview-prep packs on a fresh gate stamp.
+
+**07 · Learn** — the loop closes; each cycle feeds the next:
+- **gaps loop** — every term the scorer can't yet credit surfaces with demand evidence into a growth tracker (the Profile Gaps sheet); the market's own signal, turned into a to-do list.
+- **claimed vs demonstrated** — the sheet separates a skill I'd *claim* is mine from one *demonstrated* in the profile. The first prompts fleshing out the profile until the claim is defensible; the second (a genuine gap) prompts growth. Either way the profile grows only on demonstrated experience, so its claims stay defensible — the same standard `compose`'s fail-safe enforces on the page.
