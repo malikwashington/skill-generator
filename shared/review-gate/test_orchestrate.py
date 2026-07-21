@@ -101,6 +101,39 @@ def main():
         ok("colliding run_ids refuse (exit 2)", code == 2)
         ok("  reason says distinct run", "distinct run" in err)
 
+        # 5. reporting contract: a non-defect NOTE (out-of-band severity) is dropped, not counted,
+        #    and cannot trip the finding cap or the human-review queue.
+        s5 = os.path.join(tmp, "s5"); make_skill(s5); ld5 = os.path.join(tmp, "l5")
+        for n in STD6[:5]:
+            write_lens(ld5, n)
+        write_lens(ld5, "adoption", verdict="pass",
+                   findings=[{"severity": "info", "confirmed": True, "title": "grounded voice VERIFIED clean"}])
+        code, _, err = run_finalize(s5, ld5, "run-5")
+        ok("non-defect note does not block finalize (exit 0)", code == 0)
+        ok("  dropped-note logged", "dropped 1 non-defect note" in err)
+        ok("  note excluded from counted findings", (rg.load_attestation(s5) or {}).get("confirmed_findings") == 0)
+
+        # 6. a non-'pass' verdict backed by ZERO well-formed defects is refused (can't launder a
+        #    serious opinion into an uncounted note).
+        s6 = os.path.join(tmp, "s6"); make_skill(s6); ld6 = os.path.join(tmp, "l6")
+        for n in STD6:
+            write_lens(ld6, n)
+        write_lens(ld6, "security", verdict="fail",
+                   findings=[{"severity": "info", "confirmed": True, "title": "mis-typed serious"}])
+        code, _, err = run_finalize(s6, ld6, "run-6")
+        ok("fail verdict with no well-formed defect refuses", code == 2)
+        ok("  reason names the reconcile", "no well-formed defect" in err)
+
+        # 7. a 'fail' with only a LOW defect (no confirmed serious) is refused.
+        s7 = os.path.join(tmp, "s7"); make_skill(s7); ld7 = os.path.join(tmp, "l7")
+        for n in STD6:
+            write_lens(ld7, n)
+        write_lens(ld7, "security", verdict="fail",
+                   findings=[{"severity": "low", "confirmed": True, "title": "only a nit"}])
+        code, _, err = run_finalize(s7, ld7, "run-7")
+        ok("fail with no confirmed serious refuses", code == 2)
+        ok("  reason names confirmed serious", "no CONFIRMED serious" in err)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

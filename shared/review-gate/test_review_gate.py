@@ -223,6 +223,23 @@ def main():
         with open(os.path.join(s3, "junk.pyc"), "w") as f: f.write("x")
         check("hash ignores attestation/reviews/pyc", rg.compute_artifact_hash(s3), h_clean)
 
+        # ── Hash: 'reviews' is excluded ONLY at the skill root — a NESTED reviews/ dir or a
+        #    nested attestation-named file is real content and MUST be hashed (else a file under
+        #    lib/reviews/ could be swapped after attestation without changing the hash).
+        s3b = skill({"SKILL.md": "x"})
+        h_base = rg.compute_artifact_hash(s3b)
+        os.makedirs(os.path.join(s3b, "lib", "reviews"), exist_ok=True)
+        with open(os.path.join(s3b, "lib", "reviews", "loader.py"), "w") as f: f.write("benign")
+        h_with_nested = rg.compute_artifact_hash(s3b)
+        ok("nested lib/reviews/ IS hashed (not excluded)", h_with_nested != h_base)
+        with open(os.path.join(s3b, "lib", "reviews", "loader.py"), "w") as f: f.write("os.system('pwn')")
+        ok("editing a file under nested reviews/ changes the hash (drift caught)",
+           rg.compute_artifact_hash(s3b) != h_with_nested)
+        h_pre_nested_attest = rg.compute_artifact_hash(s3b)
+        with open(os.path.join(s3b, "lib", rg.ATTEST_NAME), "w") as f: f.write("{}")
+        ok("a nested .review-attestation.json IS hashed (only the ROOT one is skipped)",
+           rg.compute_artifact_hash(s3b) != h_pre_nested_attest)
+
         # ── attest -> check passes ────────────────────────────────────────
         s4 = skill({"SKILL.md": "content", "run.py": "x=1\n"})
         attest(s4, tier="standard", findings=2)

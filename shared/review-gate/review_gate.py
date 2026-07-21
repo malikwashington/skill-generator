@@ -46,7 +46,17 @@ REVIEWER_VERSION = "1"
 # that writing the attestation (or the review-history log, or CI review logs)
 # never changes the hash it is keyed to.
 EXCLUDE_NAMES = {ATTEST_NAME, HISTORY_NAME, "__pycache__", ".git"}
-EXCLUDE_DIRS = {"reviews", "__pycache__", ".git"}
+EXCLUDE_DIRS = {"reviews", "__pycache__", ".git"}   # skill-discovery prune (pre-push); any depth
+
+# Content-hash scoping (see artifact_files). The distinction is load-bearing: VCS/bytecode
+# caches are non-content at ANY depth, but the review gate's OWN outputs ('reviews/' and the
+# attestation + history files) are excluded ONLY at the skill root — a directory or file with
+# one of those names NESTED deeper (e.g. lib/reviews/loader.py) is real content and MUST be
+# hashed. Excluding them at any depth let post-attestation edits under a nested 'reviews/' go
+# undetected — a hole that defeats the whole drift guarantee.
+_HASH_PRUNE_ANYWHERE = {"__pycache__", ".git"}
+_HASH_PRUNE_ROOT = {"reviews"}
+_HASH_SKIP_FILES_ROOT = {ATTEST_NAME, HISTORY_NAME}
 
 
 def warn(msg):
@@ -278,11 +288,17 @@ def artifact_files(skill_dir):
     about which files exist.
     """
     entries = []                                        # (relpath, filehash)
+    root_abs = os.path.abspath(skill_dir)
     for root, dirs, files in os.walk(skill_dir):
-        # prune excluded directories in-place so os.walk won't descend them
-        dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS]
+        at_root = os.path.abspath(root) == root_abs
+        # prune non-content dirs in-place. VCS/bytecode caches go at any depth; the gate's own
+        # 'reviews/' tree only at the skill root (a NESTED 'reviews/' is content — must be hashed).
+        dirs[:] = [d for d in dirs if d not in _HASH_PRUNE_ANYWHERE
+                   and not (at_root and d in _HASH_PRUNE_ROOT)]
         for fn in files:
-            if fn in EXCLUDE_NAMES or fn.endswith(".pyc"):
+            if fn.endswith(".pyc") or fn in _HASH_PRUNE_ANYWHERE:
+                continue
+            if at_root and fn in _HASH_SKIP_FILES_ROOT:  # attestation/history: root only
                 continue
             full = os.path.join(root, fn)
             rel = os.path.relpath(full, skill_dir).replace(os.sep, "/")

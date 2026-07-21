@@ -93,7 +93,7 @@ irrelevant because the model was never the one deciding.
 - `review-tiers.json` — the tier bars + each tier's `required_lenses`. Override path with `$REVIEW_TIERS`.
 - `review_gate_hook.py` — **Stop** hook; fail-open; nudges once per turn (honors `stop_hook_active`).
 - `pre-push` — git pre-push hook; fail-closed; recurses to find skills anywhere under the repo root.
-- `test_review_gate.py` — 152 offline checks; `test_orchestrate.py` — 11 more. No third-party deps.
+- `test_review_gate.py` — 156 offline checks; `test_orchestrate.py` — 18 more; `../hooks/test_guards.py` — 54; `../hooks/test_gate.py` — 15. No third-party deps.
 
 ## The attestation
 `<skill>/.review-attestation.json`, written **only** by `review_gate.py attest` — and *only* by a

@@ -4,7 +4,7 @@
 Reads a Claude Code PreToolUse event on stdin, consults an OPTIONAL
 guard.config.json next to this script, and emits allow / ask / deny.
 
-Design (see guard-hook-layer-design.md for the full contract):
+Design (see DESIGN.md for the full contract):
   * FAIL-CLOSED with a hardcoded SAFETY FLOOR.
       - The FLOOR always runs, needs NO config and NO third-party deps.
       - Config only ADDS to the floor.
@@ -83,6 +83,12 @@ def warn(msg):    print("[guard] " + msg, file=sys.stderr)
 
 
 # ── The floor (config-independent) ────────────────────────────────────────
+# DEFENSE IN DEPTH, not the guarantee. The bash arm matches a fixed set of mutating verbs
+# and redirects, so an interpreter write (`python3 -c "open(f,'w')"`, `perl -i`, `ed`) can
+# slip past it. That is acceptable because the floor is NOT what makes the review binding:
+# the actual guarantee is review_gate.check() re-deriving the content hash and verifying each
+# lens's hash-bound evidence (so any edit — however written — invalidates the attestation),
+# backstopped by the pre-push git hook. The floor just makes the obvious hand-edits loud.
 def floor_check(tool, inp):
     low = tool.lower()
     for s in FLOOR_TOOL_SUBSTRINGS:

@@ -29,7 +29,7 @@ Each build has a `SPEC.md` (goal, tight-core scope, definition-of-done).
    ingest`; reliability primitives; a JSON source-of-state with dedup; a HUMAN GATE before any
    irreversible action. Read [PATTERN.md](PATTERN.md) before building.
 4. **Review rigorously, gate on it.** No build is "done" until it passes [REVIEW.md](REVIEW.md) (the
-   5-lens review + the failure-mode checklist). Run the review; close the gaps; re-review. Don't
+   6-lens review + the failure-mode checklist). Run the review; close the gaps; re-review. Don't
    declare ready until it clears.
 5. **Grounded voice.** All docs/READMEs factual and understated — never superlatives. (User memory:
    `grounded-voice-no-oversell`.)
@@ -40,7 +40,7 @@ Each build has a `SPEC.md` (goal, tight-core scope, definition-of-done).
 1. Read [PATTERN.md](PATTERN.md), the build's `SPEC.md`, and [REVIEW.md](REVIEW.md).
 2. Build the tight core for that skill (generalized from the upstream pipeline, never copying
    secrets/personal data).
-3. Run the [REVIEW.md](REVIEW.md) gate (multi-agent, 5 lenses). Record findings.
+3. Run the [REVIEW.md](REVIEW.md) gate (multi-agent, 6 lenses). Record findings.
 4. Close P0/P1 gaps; re-review until "ready."
 
 ## Layout

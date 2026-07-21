@@ -43,6 +43,24 @@ def _atomic_write_json(path, obj):
     os.replace(tmp, path)
 
 
+def _partition_findings(findings, lens):
+    """Split a lens's raw 'findings' into well-formed DEFECTS and NOTES, enforcing the
+    reporting contract: a finding is a LIVE DEFECT (a valid severity in KNOWN_SEVERITIES),
+    not verification narration. Positive confirmations ("verified fixed", "looks clean",
+    "by design"), status lines with an out-of-band severity ('info', 'resolved'), and
+    non-dict entries are NOTES — logged and dropped, never counted or attested. This stops
+    a sloppy lens from manufacturing a false human-review tripwire (a serious-severity but
+    unconfirmed note) or blowing the tier's finding cap with non-defects."""
+    defects, notes = [], []
+    for f in findings:
+        if isinstance(f, dict) and f.get("severity") in rg.KNOWN_SEVERITIES:
+            f.setdefault("lens", lens)
+            defects.append(f)
+        else:
+            notes.append(f)
+    return defects, notes
+
+
 def finalize(args):
     skill = os.path.abspath(args.skill)
     if not os.path.isdir(skill):
@@ -82,15 +100,29 @@ def finalize(args):
         if run_id in seen_runs:
             _die("two lenses report run_id %r — each lens must be a distinct run" % run_id)
         seen_runs.add(run_id)
-        for fnd in findings:                       # tag each finding with its lens (audit trail)
-            if isinstance(fnd, dict):
-                fnd.setdefault("lens", lens)
-        all_findings.extend(findings)
+        # enforce the reporting contract: count DEFECTS, drop NOTES (see _partition_findings)
+        defects, notes = _partition_findings(findings, lens)
+        if notes:
+            print("[orchestrate] lens %r: dropped %d non-defect note(s) from findings "
+                  "(contract: findings are live defects only, not verification narration)."
+                  % (lens, len(notes)), file=sys.stderr)
+        # a serious verdict must be backed by real defects — otherwise a mis-encoded serious
+        # finding would silently vanish into 'notes'. Refuse the inconsistency, never launder it.
+        v = verdict.lower()
+        if v in ("fail", "concerns") and not defects:
+            _die("lens %r verdict=%r but produced no well-formed defect finding — reconcile the "
+                 "lens output. A non-'pass' verdict cannot rest on zero defects; a mis-typed "
+                 "severity drops a finding to an uncounted note." % (lens, verdict))
+        if v == "fail" and not any(d.get("confirmed")
+                                   and d.get("severity") in rg.SERIOUS_SEVERITIES for d in defects):
+            _die("lens %r verdict='fail' but carries no CONFIRMED serious defect — reconcile "
+                 "(a fail must be backed by a confirmed critical/high/medium)." % lens)
+        all_findings.extend(defects)
         # the hash-bound evidence transcript — this is what the gate verifies
         tpath = os.path.join(edir, "%s.json" % lens)
         _atomic_write_json(tpath, {"lens": lens, "artifact_hash": art_hash,
                                    "verdict": verdict, "agent_run_id": run_id,
-                                   "findings": findings})
+                                   "findings": defects})
         lenses.append({"lens": lens, "run_id": run_id, "verdict": verdict,
                        "evidence": {"path": os.path.relpath(tpath, skill),
                                     "sha256": rg._sha256_file(tpath)}})

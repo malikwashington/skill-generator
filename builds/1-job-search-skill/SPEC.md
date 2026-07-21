@@ -56,4 +56,4 @@ distinct from the critique gate, which is an informed mechanics check). Each is 
 PATTERN.md "Proven extensions") and ports cleanly later; none is needed for the v1 closed loop.
 
 **Done = passes [../../REVIEW.md](../../REVIEW.md) at "ready."** This build doubles as one of Malik's
-strongest on-lane portfolio artifacts once genericized (user memory: `candidacy-gaps-goals`).
+on-lane portfolio artifacts once genericized (user memory: `candidacy-gaps-goals`).

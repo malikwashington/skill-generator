@@ -1,12 +1,19 @@
 # skill-generator
 
-A factory for building **human-gated LLM judgment pipelines** as self-contained Claude Code
-skills. It takes one reusable kernel — the *worklist pattern* — and turns it into reviewed,
-production-shaped skills that screen a queue, tailor an artifact per target, or decide what to act
-on next, with a human in the loop before any consequential action.
+A harness for building **LLM-judgment pipelines you can trust** as self-contained Claude Code
+skills. Deterministic code owns state and safety; LLM judges make the fuzzy calls behind a
+validated JSON contract; and a skill **can't ship until it passes a code-enforced, hash-keyed
+adversarial review** — governance the code enforces, not a prose "please review first." The skills
+built this way screen a queue, tailor an artifact per target, or decide what to act on next, always
+with a human in the loop before any consequential action.
 
-The pattern was abstracted from a real, hand-built pipeline and generalized so the same machinery
-applies across domains (recruiting, procurement/RFP, grants, sales outreach, moderation, triage).
+**What ships in *this* repo is the governance** — the [review gate](shared/review-gate/) and the
+[fail-closed guards](shared/hooks/) — plus the *worklist pattern* it enforces ([PATTERN.md](PATTERN.md)).
+The runnable `emit → judge → ingest` engine lives in each shipped skill (below) and in the private
+production pipeline this was abstracted from: a job-search system (discovery → scoring → résumé
+tailoring → source-verification) I run on my own data. The pattern is generalized so the same
+machinery applies across domains (recruiting, procurement/RFP, grants, sales outreach, moderation,
+triage).
 
 ## The kernel: the worklist pattern
 
@@ -43,7 +50,7 @@ The kernel ships with the reliability and safety primitives that make LLM judgme
   that hard-blocks send/submit/secret-write surfaces with a hardcoded safety floor and fail-closed
   semantics.
 
-The review methodology itself — a multi-agent, five-lens adversarial review with a failure-mode
+The review methodology itself — a multi-agent, six-lens adversarial review with a failure-mode
 checklist — is in [REVIEW.md](REVIEW.md). No build is "done" until it passes.
 
 ## Shipped skills

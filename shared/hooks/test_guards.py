@@ -7,7 +7,7 @@ file passes identically in every deployment regardless of which
 guard.config.json ships alongside it. A final light check confirms the
 shipped config (if present) is at least valid JSON.
 """
-import json, os, subprocess, sys, tempfile
+import contextlib, io, json, os, subprocess, sys, tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 GUARD = os.path.join(HERE, "guard.py")
@@ -217,15 +217,19 @@ def main():
             d, _ = run("Edit", {"file_path": os.path.join(sk, "SKILL.md")}, ac, cwd=root)
             check("editing skill source is allowed", d, "allow")
 
-            # attested + current -> the ship goes through
+            # attested + current -> the ship goes through. Build the attestation the way
+            # production does — the orchestrator over a clean 6-lens set — so it carries the
+            # hash-bound lens_evidence that rg.check now requires (a hand-rolled dict lacks it).
             sys.path.insert(0, os.path.dirname(os.path.abspath(rg_path)))
-            import review_gate as _rg                              # noqa: E402
-            _rg.write_attestation(sk, {
-                "skill": "demo", "artifact_hash": _rg.compute_artifact_hash(sk),
-                "review_tier": "standard", "review_scope": "full", "verdict": "pass",
-                "review_verdict": "clean", "confirmed_findings": 0,
-                "serious_candidates": 0, "run_id": "t", "reviewed_at": "2026-07-09",
-                "reviewer_version": "1"})
+            import orchestrate as _orch                            # noqa: E402
+            _ld = tempfile.mkdtemp()
+            for _n in ("correctness", "security", "dx", "completeness", "packaging", "adoption"):
+                with open(os.path.join(_ld, _n + ".json"), "w") as f:
+                    json.dump({"lens": _n, "verdict": "pass", "run_id": "agent-" + _n,
+                               "findings": []}, f)
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                _orch.main(["finalize", "--skill", sk, "--tier", "standard", "--lens-dir", _ld,
+                            "--run-id", "t", "--reviewed-at", "2026-07-09T00:00:00Z"])
             d, _ = run("Bash", {"command": "cp -r %s ~/.claude/skills/" % sk}, ac, cwd=root)
             check("ship of an ATTESTED, current skill is allowed", d, "allow")
 

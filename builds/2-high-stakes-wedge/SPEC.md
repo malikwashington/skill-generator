@@ -13,7 +13,7 @@ compliance, legal review, clinical / grant / admissions screening, due diligence
 **The wedge:** there, "the model judges + flags, a human owns the decision, every run is
 reliability-checked and logged" is not a nice-to-have — it's the *mandated* posture. So the pattern's
 defining features (reliability + human gate + provenance) are exactly what those buyers must have,
-and the fit is undeniable. That's why this is the sharpest entry point.
+and the fit is clear. That's why it's a strong entry point.
 
 ## v1 scope (tight core)
 - **`emit`** — items + a user-supplied **rubric/criteria** + a response schema (score per criterion,

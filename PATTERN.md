@@ -112,4 +112,4 @@ from the pattern; each earned its place by failing without it or paying for itse
   *proposes*; **code disposes** — drift is irrelevant because the model never decides. Honest bar:
   skipping requires a deliberate, visible act, never accidental omission. Meant to be standard across
   all builds (finalize gate + pre-push + `SKILL.md` declaring a `review_tier`). Built + tested
-  (26/26) 2026-07-09. See `shared/review-gate/README.md`.
+  (all suites green — counts in `shared/review-gate/README.md`).
