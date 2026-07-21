@@ -53,6 +53,16 @@ def warn(msg):
     print("[review-gate] " + msg, file=sys.stderr)
 
 
+def _rel_to_skill(path, skill_dir):
+    """A path recorded in the attestation/history must be RELATIVE to the skill — an absolute
+    path (os.path.abspath) leaks the reviewer's machine layout + OS username into a public repo
+    when the review artifacts travel with the skill. Falls back to the basename if the target
+    sits outside the skill dir."""
+    ap, root = os.path.abspath(path), os.path.abspath(skill_dir)
+    rp = os.path.relpath(ap, root)
+    return rp if not rp.startswith("..") else os.path.basename(ap)
+
+
 # ── Candidate severity ─────────────────────────────────────────────────────
 # A "serious" candidate is critical/high/medium. Lows are shippable. This set is
 # the criterion; it lives here, in the sole writer, so no caller can restate it.
@@ -149,29 +159,87 @@ def load_result(path, skill_dir):
     return result
 
 
-def check_lens_coverage(result, required_lenses):
-    """Verify the review DECLARED the tier's required reviewing passes, each as a DISTINCT
-    run. Returns the sorted covered lens names; raises ResultError if coverage is short.
+def _sha256_file(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
-    Why this exists: derive_counts() gates on findings[], but a findings[] list alone does
-    NOT prove the review's breadth — a 3-lens pass and a 6-lens pass produce the same shape,
-    so "I ran fewer lenses" used to be invisible to the gate (the exact drift the gate exists
-    to kill, one level up). Each required lens must appear in result['lenses'] as
-    {lens, run_id, verdict}, with run_ids DISTINCT across lenses so one pass can't be
-    relabelled as several. A model can still forge run_ids, but that is a deliberate, visible
-    act of fabrication — not the accidental omission the gate is built to prevent.
-    """
+
+def _verify_evidence(L, name, skill_dir, reviewed_hash):
+    """Verify a lens's evidence: a transcript file, hash-bound to the reviewed content.
+
+    'declared a lens' is not 'ran a lens'. Each lens must carry evidence {path, sha256} of
+    its actual review transcript, and the gate checks (a) the file exists UNDER the skill
+    (no traversal), (b) its sha256 matches what the result declares (immutable reference),
+    and (c) the transcript itself records artifact_hash == the reviewed content and its own
+    lens name. (c) binds each lens to the exact bytes it reviewed — so a lens transcript from
+    an EARLIER version of the skill can't be reused for a later one. Returns {lens,path,sha256}.
+    Faking a lens now requires forging a self-consistent, hash-bound transcript — a deliberate
+    act, not an omission. Evidence lives under reviews/ (excluded from the content hash), so
+    writing it never perturbs the hash it attests to."""
+    ev = L.get("evidence")
+    if not isinstance(ev, dict):
+        raise ResultError("lens %r has no 'evidence' {path, sha256} — a declared lens must "
+                          "carry its review transcript, hash-bound to the content." % name)
+    rel, declared = ev.get("path"), ev.get("sha256")
+    if not (isinstance(rel, str) and rel.strip()):
+        raise ResultError("lens %r evidence has no 'path'" % name)
+    if not (isinstance(declared, str) and declared.strip()):
+        raise ResultError("lens %r evidence has no 'sha256'" % name)
+    full = os.path.realpath(os.path.join(skill_dir, rel))
+    root = os.path.realpath(skill_dir)
+    if not (full == root or full.startswith(root + os.sep)):
+        raise ResultError("lens %r evidence path %r escapes the skill dir" % (name, rel))
+    if not os.path.isfile(full):
+        raise ResultError("lens %r evidence file not found: %s" % (name, rel))
+    actual = _sha256_file(full)
+    if actual != declared:
+        raise ResultError("lens %r evidence sha256 mismatch (declared %s..., file %s...) — "
+                          "the transcript was altered after the result referenced it."
+                          % (name, declared[:12], actual[:12]))
+    try:
+        with open(full, encoding="utf-8") as f:
+            transcript = json.load(f)
+    except Exception as e:
+        raise ResultError("lens %r evidence is not readable JSON: %s" % (name, e))
+    if not isinstance(transcript, dict):
+        raise ResultError("lens %r evidence transcript is not a JSON object" % name)
+    if transcript.get("artifact_hash") != reviewed_hash:
+        raise ResultError("lens %r transcript reviewed hash %s... but this result binds to "
+                          "%s... — the lens reviewed different bytes (stale evidence)."
+                          % (name, str(transcript.get("artifact_hash"))[:12], reviewed_hash[:12]))
+    if transcript.get("lens") != name:
+        raise ResultError("lens %r evidence transcript labels itself %r — lens/evidence mismatch."
+                          % (name, transcript.get("lens")))
+    return {"lens": name, "path": rel, "sha256": declared}
+
+
+def check_lens_coverage(result, required_lenses, skill_dir=None, reviewed_hash=None):
+    """Verify the review RAN the tier's required passes, each a DISTINCT run backed by a
+    hash-bound transcript. Returns (sorted covered lens names, evidence manifest); raises
+    ResultError if coverage or evidence is short.
+
+    A findings[] list alone does not prove the review's breadth — a 3-lens pass and a 6-lens
+    pass produce the same shape. Each required lens must appear in result['lenses'] as
+    {lens, run_id, verdict, evidence:{path, sha256}}: run_ids DISTINCT (one pass can't be
+    relabelled as several) and evidence hash-bound to the reviewed content (a declared lens
+    must be a RUN lens — see _verify_evidence). Evidence is required whenever the tier
+    requires lenses and skill_dir/reviewed_hash are supplied (the attest path always does)."""
     required = sorted(set(required_lenses or []))
     lenses = result.get("lenses")
     if not required:
-        return sorted({str(L.get("lens")) for L in lenses
-                       if isinstance(L, dict) and L.get("lens")}) if isinstance(lenses, list) else []
+        names = sorted({str(L.get("lens")) for L in lenses
+                        if isinstance(L, dict) and L.get("lens")}) if isinstance(lenses, list) else []
+        return names, []
     if not isinstance(lenses, list) or not lenses:
         raise ResultError(
             "result declares no 'lenses[]', but this tier requires the reviewing passes %s. "
-            "A findings[] list alone does not prove the review's breadth — declare each lens "
-            "as {\"lens\": name, \"run_id\": id, \"verdict\": v}." % required)
-    covered, runs = set(), []
+            "Each lens must be declared as {\"lens\": name, \"run_id\": id, \"verdict\": v, "
+            "\"evidence\": {path, sha256}} and produced by the review orchestrator." % required)
+    covered, runs, manifest = set(), [], []
+    verify_evidence = skill_dir is not None and reviewed_hash is not None
     for i, L in enumerate(lenses):
         if not isinstance(L, dict):
             raise ResultError("lenses[%d] is not an object" % i)
@@ -186,6 +254,8 @@ def check_lens_coverage(result, required_lenses):
         if not verdict.strip():
             raise ResultError("lens %r has no 'verdict' — a lens with no verdict did not run"
                               % name)
+        if verify_evidence:
+            manifest.append(_verify_evidence(L, name, skill_dir, reviewed_hash))
         covered.add(name)
         runs.append(run)
     dupes = sorted({r for r in runs if runs.count(r) > 1})
@@ -196,7 +266,7 @@ def check_lens_coverage(result, required_lenses):
     if missing:
         raise ResultError("missing required lens(es) for this tier: %s (declared: %s)"
                           % (missing, sorted(covered)))
-    return sorted(covered)
+    return sorted(covered), manifest
 
 
 # ── Content hash ───────────────────────────────────────────────────────────
@@ -410,6 +480,25 @@ def check(skill_dir, tiers):
         if missing:
             return False, ("attestation is missing required lens(es) for tier '%s': %s "
                            "(covered: %s) — re-review and re-attest." % (tier, missing, sorted(covered)))
+        # Evidence belt: the per-lens transcripts must still be present + intact at ship time
+        # (deleting/altering a transcript after attest must re-lock the gate). Content drift is
+        # already caught above (stale); this catches evidence tampering with content unchanged.
+        manifest = att.get("lens_evidence")
+        if not isinstance(manifest, list) or len(manifest) < len(required_lenses):
+            return False, ("attestation records no per-lens evidence but tier '%s' requires it "
+                           "— re-run the review through the orchestrator and re-attest." % tier)
+        for ev in manifest:
+            try:
+                full = os.path.realpath(os.path.join(skill_dir, ev.get("path", "")))
+                if not (full == os.path.realpath(skill_dir)
+                        or full.startswith(os.path.realpath(skill_dir) + os.sep)):
+                    raise ValueError("evidence path escapes skill")
+                if not os.path.isfile(full) or _sha256_file(full) != ev.get("sha256"):
+                    raise ValueError("missing or altered")
+            except Exception:
+                return False, ("lens '%s' evidence is missing or altered (%s) — the review "
+                               "transcript backing this attestation is gone; re-review and "
+                               "re-attest." % (ev.get("lens"), ev.get("path")))
 
     return True, ("attested current: tier=%s verdict=%s findings=%s lenses=%s run=%s"
                   % (tier, att.get("verdict"), cf, len(att.get("lenses_covered") or []),
@@ -562,7 +651,7 @@ def cmd_attest(args):
         "human_review_pending": eff_human,
         "run_id": args.run_id,
         "reviewed_at": reviewed_at,
-        "counts_derived_from": (os.path.abspath(args.from_result)
+        "counts_derived_from": (_rel_to_skill(args.from_result, skill_dir)
                                 if counts else None),
     })
 
@@ -613,11 +702,15 @@ def cmd_attest(args):
     if args.tier not in tiers:
         warn("attest: unknown --tier %r (known: %s)" % (args.tier, ", ".join(sorted(tiers))))
         return 2
-    # Lens-coverage gate: a full pass must DECLARE the tier's required reviewing passes, each
-    # a distinct run — so "I ran fewer lenses" is structurally refused, not merely discouraged
-    # in prose. Derived from the same result artifact the counts came from (never a typed list).
+    # Lens-coverage gate: a full pass must RUN the tier's required reviewing passes, each a
+    # distinct run backed by a hash-bound transcript — so "I ran fewer lenses" and "I declared
+    # a lens I didn't run" are both structurally refused, not merely discouraged in prose.
+    # Evidence is verified against the CURRENT content (skill_dir + artifact_hash), closing the
+    # bare-findings hand path: no evidence bundle => no attestation.
     try:
-        covered_lenses = check_lens_coverage(result_doc, tiers[args.tier].get("required_lenses", []))
+        covered_lenses, lens_evidence = check_lens_coverage(
+            result_doc, tiers[args.tier].get("required_lenses", []),
+            skill_dir=skill_dir, reviewed_hash=artifact_hash)
     except ResultError as e:
         warn("attest REFUSED: %s (logged to history)" % e)
         return 2
@@ -634,10 +727,11 @@ def cmd_attest(args):
         "human_review_pending": eff_human,
         "human_review_adjudication": (args.adjudication or None) if eff_human else None,
         "lenses_covered": covered_lenses,
+        "lens_evidence": lens_evidence,
         "run_id": args.run_id,
         "reviewed_at": reviewed_at,
         "reviewer_version": REVIEWER_VERSION,
-        "counts_derived_from": os.path.abspath(args.from_result),
+        "counts_derived_from": _rel_to_skill(args.from_result, skill_dir),
     }
     write_attestation(skill_dir, data)
     print("attested %s -> hash %s... tier=%s verdict=%s findings=%d serious_candidates=%d "

@@ -46,16 +46,31 @@ drift the gate kills, one level up). Now each tier declares `required_lenses` in
 ]
 ```
 
-`check_lens_coverage` refuses the attestation unless every required lens is present, each with a
-`verdict` (a lens with none didn't run) and a **distinct `run_id`** (so one pass can't be relabelled
-as several). `check` re-asserts it, so a legacy attestation (predating the gate, no `lenses_covered`)
-is re-locked at any lens-requiring tier until re-reviewed. Default tiers: `standard` requires
-correctness / security / dx / packaging; `high` adds adversarial-verify; `critical` adds
-completeness. Edit the sets to fit your process — the *enforcement* is code; the *taxonomy* is data.
+Each required lens must appear as `{lens, run_id, verdict, evidence:{path, sha256}}`. The gate
+requires each with a `verdict` (a lens with none didn't run), a **distinct `run_id`** (so one pass
+can't be relabelled as several), and — the load-bearing part — **hash-bound evidence**: a transcript
+file that exists under the skill, whose sha256 matches, and which itself records
+`artifact_hash == the reviewed content`. So a declared lens must be a *run* lens, bound to the exact
+bytes it reviewed (a transcript from an earlier version can't be reused). `check` re-verifies the
+evidence at ship time, so deleting or altering a transcript re-locks the gate. Default tiers:
+`standard` requires correctness / security / dx / completeness / packaging / adoption (6);
+`high` adds adversarial-verify; `critical` adds completeness-critic. The *enforcement* is code; the
+*taxonomy* is data ([review-tiers.json](review-tiers.json)).
 
-**The honest limit** (same as the rest of the gate): a model can still forge distinct run-ids for
-lenses it didn't run. That's a deliberate, visible act of fabrication — not the accidental omission
-the gate exists to prevent. The bar is that under-scoping now requires lying, not just forgetting.
+### The orchestrator is the only producer
+[`orchestrate.py`](orchestrate.py) is the sole sanctioned path to a passing attestation. The review
+harness spawns one agent per required lens (each writes `<lens-dir>/<lens>.json` with its verdict +
+findings); `orchestrate.py finalize` then writes each hash-bound transcript, assembles the result,
+and calls `attest`. It refuses if any required lens produced no output (a lens that didn't run), and
+it never *forces* a pass — it asks for one and the gate disposes (a confirmed serious finding is
+refused by the gate). There is no bare-`attest --from-result` shortcut: without a complete evidence
+bundle, no attestation.
+
+**The honest limit** (unchanged, and stated plainly): you own the machine, so you can always edit the
+hook, `git push --no-verify`, or forge a self-consistent hash-bound transcript. What the gate
+guarantees is that shipping without a real, full-breadth, current-content review is a **deliberate,
+visible act of circumvention** — never accidental omission, never a quiet model shortcut. The single
+sanctioned bypass is `override` (human-named, justified, permanently recorded).
 
 ## The enforcement stack (where each layer sits)
 
@@ -72,11 +87,13 @@ irrelevant because the model was never the one deciding.
 
 ## Files
 - `review_gate.py` — core library + CLI (`attest` / `mark-baseline` / `check` / `check-all` /
-  `status` / `history` / `next-scope`). Stdlib only.
-- `review-tiers.json` — the tier bars (below). Override path with `$REVIEW_TIERS`.
+  `status` / `history` / `next-scope` / `override` / `hash`). Stdlib only.
+- `orchestrate.py` — the review orchestrator: assembles hash-bound evidence from the lens agents'
+  outputs and attests. The sole sanctioned producer of a passing attestation.
+- `review-tiers.json` — the tier bars + each tier's `required_lenses`. Override path with `$REVIEW_TIERS`.
 - `review_gate_hook.py` — **Stop** hook; fail-open; nudges once per turn (honors `stop_hook_active`).
 - `pre-push` — git pre-push hook; fail-closed; recurses to find skills anywhere under the repo root.
-- `test_review_gate.py` — 82 offline checks, no third-party deps: `python3 test_review_gate.py`.
+- `test_review_gate.py` — 152 offline checks; `test_orchestrate.py` — 11 more. No third-party deps.
 
 ## The attestation
 `<skill>/.review-attestation.json`, written **only** by `review_gate.py attest` — and *only* by a

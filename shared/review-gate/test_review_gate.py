@@ -44,51 +44,73 @@ def make_skill(files):
 # The full lens set — a superset covering every tier's required_lenses, so helper-built
 # attestations/results satisfy the lens-coverage gate by default. Violation tests pass a
 # narrower/short set explicitly.
-ALL_LENSES = ["correctness", "security", "dx", "packaging", "adversarial-verify", "completeness"]
+ALL_LENSES = ["correctness", "security", "dx", "completeness", "packaging", "adoption",
+              "adversarial-verify", "completeness-critic"]
+
+
+def write_transcript(skill_dir, artifact_hash, name, run_id, verdict="pass", bind_hash=None):
+    """Write a lens transcript (evidence) under reviews/results/evidence/ (excluded from the
+    content hash). Returns {path, sha256}. bind_hash lets a test bind evidence to the WRONG hash."""
+    edir = os.path.join(skill_dir, "reviews", "results", "evidence")
+    os.makedirs(edir, exist_ok=True)
+    full = os.path.join(edir, "%s.json" % name)
+    with open(full, "w") as f:
+        json.dump({"lens": name,
+                   "artifact_hash": bind_hash if bind_hash is not None else artifact_hash,
+                   "verdict": verdict, "agent_run_id": run_id, "findings": []}, f)
+    return {"path": os.path.relpath(full, skill_dir), "sha256": rg._sha256_file(full)}
+
+
+def lens_entry(skill_dir, artifact_hash, name, run_id=None, verdict="pass",
+               evidence=True, bind_hash=None):
+    """A result lens entry, writing its evidence transcript by default."""
+    e = {"lens": name, "run_id": run_id or ("run-%s" % name), "verdict": verdict}
+    if evidence:
+        e["evidence"] = write_transcript(skill_dir, artifact_hash, name, e["run_id"],
+                                         verdict, bind_hash)
+    return e
 
 
 def attest(skill_dir, tier="standard", verdict="pass",
            review_verdict="solid-with-fixes", findings=0, run_id="run-1",
            lenses_covered=None):
-    """Write an attestation keyed to the CURRENT content (via the library)."""
-    data = {
+    """Write an attestation keyed to the CURRENT content (via the library), with real
+    evidence transcripts for each covered lens (so check()'s evidence belt re-verifies)."""
+    h = rg.compute_artifact_hash(skill_dir)
+    names = ALL_LENSES if lenses_covered is None else lenses_covered
+    manifest = [{"lens": n, **write_transcript(skill_dir, h, n, "run-%s" % n)} for n in names]
+    rg.write_attestation(skill_dir, {
         "skill": os.path.basename(skill_dir),
-        "artifact_hash": rg.compute_artifact_hash(skill_dir),
+        "artifact_hash": h,
         "review_tier": tier,
         "review_scope": "full",
         "verdict": verdict,
         "review_verdict": review_verdict,
         "confirmed_findings": findings,
-        "lenses_covered": ALL_LENSES if lenses_covered is None else lenses_covered,
+        "lenses_covered": names,
+        "lens_evidence": manifest,
         "run_id": run_id,
         "reviewed_at": "2026-07-09T00:00:00Z",
         "reviewer_version": "1",
-    }
-    rg.write_attestation(skill_dir, data)
-
-
-def _default_lenses():
-    """One declared reviewing pass per lens, each a distinct run_id (satisfies coverage)."""
-    return [{"lens": n, "run_id": "run-%s" % n, "verdict": "pass"} for n in ALL_LENSES]
+    })
 
 
 def write_result(skill_dir, findings=None, artifact_hash=None, scope="full",
                  name="test-result.json", lenses="__default__"):
     """Write a review-result artifact under reviews/ (excluded from the hash).
 
-    `findings` is the raw list the gate recomputes its counts from. `lenses` is the declared
-    reviewing-pass coverage; default is the full set (distinct run_ids). Pass an explicit list
-    (or None to omit the key entirely) to exercise the lens-coverage gate.
+    `findings` is the raw list the gate recomputes its counts from. `lenses` defaults to the
+    full set, each with a real hash-bound evidence transcript. Pass an explicit list (build it
+    with lens_entry) or None (to omit the key) to exercise the lens-coverage/evidence gate.
     """
     rdir = os.path.join(skill_dir, "reviews", "results")
     os.makedirs(rdir, exist_ok=True)
     path = os.path.join(rdir, name)
-    payload = {"review_scope": scope,
-               "artifact_hash": (artifact_hash if artifact_hash is not None
-                                 else rg.compute_artifact_hash(skill_dir)),
+    h = artifact_hash if artifact_hash is not None else rg.compute_artifact_hash(skill_dir)
+    payload = {"review_scope": scope, "artifact_hash": h,
                "findings": [] if findings is None else findings}
     if lenses == "__default__":
-        payload["lenses"] = _default_lenses()
+        payload["lenses"] = [lens_entry(skill_dir, h, n) for n in ALL_LENSES]
     elif lenses is not None:
         payload["lenses"] = lenses
     with open(path, "w") as f:
@@ -195,8 +217,8 @@ def main():
         # ── Hash: excludes attestation + reviews/ + pyc ───────────────────
         s3 = skill({"SKILL.md": "x"})
         h_clean = rg.compute_artifact_hash(s3)
-        attest(s3)                                       # writes .review-attestation.json
-        os.makedirs(os.path.join(s3, "reviews"))
+        attest(s3)                                       # writes .review-attestation.json + reviews/ evidence
+        os.makedirs(os.path.join(s3, "reviews"), exist_ok=True)
         with open(os.path.join(s3, "reviews", "r1.md"), "w") as f: f.write("log")
         with open(os.path.join(s3, "junk.pyc"), "w") as f: f.write("x")
         check("hash ignores attestation/reviews/pyc", rg.compute_artifact_hash(s3), h_clean)
@@ -708,8 +730,11 @@ def main():
         att = rg.load_attestation(by)
         check("  attestation records derived serious_candidates", att["serious_candidates"], 0)
         check("  attestation records derived confirmed_findings", att["confirmed_findings"], 1)
-        check("  attestation records its provenance",
-              att.get("counts_derived_from"), os.path.abspath(good))
+        check("  attestation records its provenance RELATIVE to the skill (no abspath leak)",
+              att.get("counts_derived_from"),
+              os.path.relpath(os.path.abspath(good), os.path.abspath(by)))
+        ok("  provenance path does not leak an absolute machine path",
+           not att.get("counts_derived_from", "").startswith("/"))
         ok("  and the skill is now shippable", rg.check(by, rg.load_tiers())[0])
 
         # writing results under reviews/ never disturbs the hash it is keyed to
@@ -718,45 +743,77 @@ def main():
         check("results under reviews/ do not change the artifact hash",
               rg.compute_artifact_hash(by), h_before)
 
-        # ── LENS-COVERAGE GATE: a full pass must DECLARE the tier's required lenses ──
-        # (full coverage via the default helper is exercised throughout above; here the violations)
+        # ── LENS-COVERAGE + EVIDENCE GATE: a full pass must RUN the tier's required lenses,
+        #    each a distinct run backed by a hash-bound transcript ──
+        STD6 = ALL_LENSES[:6]  # the standard tier's required set
+
         sl1 = skill({"SKILL.md": "lens", "run.py": "x=1\n"})
-        short = write_result(sl1, [low()], lenses=[
-            {"lens": "correctness", "run_id": "r1", "verdict": "pass"},
-            {"lens": "security", "run_id": "r2", "verdict": "pass"},
-            {"lens": "dx", "run_id": "r3", "verdict": "pass"}])          # missing 'packaging'
+        h1 = rg.compute_artifact_hash(sl1)
+        short = write_result(sl1, [low()], artifact_hash=h1,
+                             lenses=[lens_entry(sl1, h1, n) for n in STD6[:5]])   # missing 'adoption'
         p = run_attest(sl1, scope="full", verdict="pass", tier="standard", from_result=short)
         check("standard attest REFUSED when a required lens is missing", p.returncode, 2)
         ok("  no attestation written on missing-lens", rg.load_attestation(sl1) is None)
 
         sl2 = skill({"SKILL.md": "lens2", "run.py": "x=1\n"})
-        collide = write_result(sl2, [low()], lenses=[
-            {"lens": "correctness", "run_id": "same", "verdict": "pass"},
-            {"lens": "security", "run_id": "same", "verdict": "pass"},   # shared run_id
-            {"lens": "dx", "run_id": "r3", "verdict": "pass"},
-            {"lens": "packaging", "run_id": "r4", "verdict": "pass"}])
-        p = run_attest(sl2, scope="full", verdict="pass", tier="standard", from_result=collide)
+        h2 = rg.compute_artifact_hash(sl2)
+        L2 = [lens_entry(sl2, h2, n) for n in STD6]
+        L2[1]["run_id"] = L2[0]["run_id"]                                        # shared run_id
+        p = run_attest(sl2, scope="full", verdict="pass", tier="standard",
+                       from_result=write_result(sl2, [low()], artifact_hash=h2, lenses=L2))
         check("attest REFUSED when two lenses share a run_id", p.returncode, 2)
 
         sl3 = skill({"SKILL.md": "lens3", "run.py": "x=1\n"})
-        noverd = write_result(sl3, [low()], lenses=[
-            {"lens": "correctness", "run_id": "r1", "verdict": "pass"},
-            {"lens": "security", "run_id": "r2", "verdict": "pass"},
-            {"lens": "dx", "run_id": "r3", "verdict": "pass"},
-            {"lens": "packaging", "run_id": "r4"}])                      # no verdict -> did not run
-        p = run_attest(sl3, scope="full", verdict="pass", tier="standard", from_result=noverd)
+        h3 = rg.compute_artifact_hash(sl3)
+        L3 = [lens_entry(sl3, h3, n) for n in STD6]
+        L3[5]["verdict"] = ""                                                    # no verdict
+        p = run_attest(sl3, scope="full", verdict="pass", tier="standard",
+                       from_result=write_result(sl3, [low()], artifact_hash=h3, lenses=L3))
         check("attest REFUSED when a lens has no verdict", p.returncode, 2)
 
         sl4 = skill({"SKILL.md": "lens4", "run.py": "x=1\n"})
-        nolens = write_result(sl4, [low()], lenses=None)                 # omits 'lenses' entirely
+        nolens = write_result(sl4, [low()], lenses=None)                         # omits 'lenses'
         p = run_attest(sl4, scope="full", verdict="pass", tier="standard", from_result=nolens)
         check("attest REFUSED when the result declares no lenses[]", p.returncode, 2)
 
-        sl5 = skill({"SKILL.md": "lens5", "run.py": "x=1\n"})            # default = full coverage
+        # EVIDENCE — a declared lens with no transcript
+        sne = skill({"SKILL.md": "noev", "run.py": "x=1\n"})
+        hne = rg.compute_artifact_hash(sne)
+        Lne = [lens_entry(sne, hne, n) for n in STD6]
+        del Lne[0]["evidence"]                                                   # correctness: no evidence
+        p = run_attest(sne, scope="full", verdict="pass", tier="standard",
+                       from_result=write_result(sne, [low()], artifact_hash=hne, lenses=Lne))
+        check("attest REFUSED when a declared lens carries no evidence", p.returncode, 2)
+
+        # EVIDENCE — transcript records a DIFFERENT hash (lens reviewed other bytes)
+        swh = skill({"SKILL.md": "wronghash", "run.py": "x=1\n"})
+        hwh = rg.compute_artifact_hash(swh)
+        Lwh = [lens_entry(swh, hwh, n) for n in STD6]
+        Lwh[0] = lens_entry(swh, hwh, "correctness", bind_hash="deadbeef" * 8)   # evidence bound to bogus hash
+        p = run_attest(swh, scope="full", verdict="pass", tier="standard",
+                       from_result=write_result(swh, [low()], artifact_hash=hwh, lenses=Lwh))
+        check("attest REFUSED when a lens transcript records a different hash", p.returncode, 2)
+
+        # EVIDENCE — transcript altered after the result referenced it (sha256 mismatch)
+        sal = skill({"SKILL.md": "altered", "run.py": "x=1\n"})
+        hal = rg.compute_artifact_hash(sal)
+        Lal = [lens_entry(sal, hal, n) for n in STD6]
+        al = write_result(sal, [low()], artifact_hash=hal, lenses=Lal)
+        with open(os.path.join(sal, Lal[0]["evidence"]["path"]), "a") as f:
+            f.write(" ")                                                         # tamper -> sha256 drifts
+        p = run_attest(sal, scope="full", verdict="pass", tier="standard", from_result=al)
+        check("attest REFUSED when evidence sha256 no longer matches", p.returncode, 2)
+
+        sl5 = skill({"SKILL.md": "lens5", "run.py": "x=1\n"})                    # default = full evidence-backed coverage
         p = run_attest(sl5, scope="full", verdict="pass", tier="standard", findings=1)
-        check("attest PASSES with full lens coverage", p.returncode, 0)
-        ok("  attestation records lenses_covered",
-           bool((rg.load_attestation(sl5) or {}).get("lenses_covered")))
+        check("attest PASSES with full evidence-backed lens coverage", p.returncode, 0)
+        att5 = rg.load_attestation(sl5) or {}
+        ok("  attestation records lenses_covered + lens_evidence",
+           bool(att5.get("lenses_covered")) and bool(att5.get("lens_evidence")))
+        ok("  and the fully-attested skill is shippable", rg.check(sl5, tiers)[0])
+        # deleting a transcript re-locks the gate (evidence belt in check())
+        os.remove(os.path.join(sl5, att5["lens_evidence"][0]["path"]))
+        ok("  deleting a lens transcript re-locks check()", not rg.check(sl5, tiers)[0])
 
         # check() belt: a legacy attestation (no lenses_covered) fails a lens-required tier
         sl6 = skill({"SKILL.md": "legacy", "run.py": "x=1\n"})
