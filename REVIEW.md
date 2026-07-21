@@ -9,6 +9,12 @@ Spawn a multi-agent review (one agent per lens), each **reading the actual build
 the plan), returning a structured verdict; then synthesize a blunt readiness call + a prioritized
 gap list. Re-run after closing gaps.
 
+**Lens coverage is now enforced in code, not left to this prose.** The result artifact a full-pass
+attestation is derived from must declare a `lenses[]` (each lens a distinct run with a verdict), and
+[`shared/review-gate/`](shared/review-gate/) refuses the attestation if a tier's `required_lenses`
+aren't all present. So under-running the review — the failure that prompted this — is structurally
+refused, not just discouraged here. Each lens below maps to a `required_lenses` entry.
+
 ## The 5 lenses (rubric)
 1. **Skill design / DX** — is there ONE authoritative `SKILL.md` (frontmatter + a concrete
    when-to-invoke trigger)? Is the invocation flow clear (what the user types, what happens, what

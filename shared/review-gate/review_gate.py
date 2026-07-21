@@ -149,6 +149,56 @@ def load_result(path, skill_dir):
     return result
 
 
+def check_lens_coverage(result, required_lenses):
+    """Verify the review DECLARED the tier's required reviewing passes, each as a DISTINCT
+    run. Returns the sorted covered lens names; raises ResultError if coverage is short.
+
+    Why this exists: derive_counts() gates on findings[], but a findings[] list alone does
+    NOT prove the review's breadth — a 3-lens pass and a 6-lens pass produce the same shape,
+    so "I ran fewer lenses" used to be invisible to the gate (the exact drift the gate exists
+    to kill, one level up). Each required lens must appear in result['lenses'] as
+    {lens, run_id, verdict}, with run_ids DISTINCT across lenses so one pass can't be
+    relabelled as several. A model can still forge run_ids, but that is a deliberate, visible
+    act of fabrication — not the accidental omission the gate is built to prevent.
+    """
+    required = sorted(set(required_lenses or []))
+    lenses = result.get("lenses")
+    if not required:
+        return sorted({str(L.get("lens")) for L in lenses
+                       if isinstance(L, dict) and L.get("lens")}) if isinstance(lenses, list) else []
+    if not isinstance(lenses, list) or not lenses:
+        raise ResultError(
+            "result declares no 'lenses[]', but this tier requires the reviewing passes %s. "
+            "A findings[] list alone does not prove the review's breadth — declare each lens "
+            "as {\"lens\": name, \"run_id\": id, \"verdict\": v}." % required)
+    covered, runs = set(), []
+    for i, L in enumerate(lenses):
+        if not isinstance(L, dict):
+            raise ResultError("lenses[%d] is not an object" % i)
+        name = L.get("lens") if isinstance(L.get("lens"), str) else ""
+        run = L.get("run_id") if isinstance(L.get("run_id"), str) else ""
+        verdict = L.get("verdict") if isinstance(L.get("verdict"), str) else ""
+        if not name.strip():
+            raise ResultError("lenses[%d] has no 'lens' name" % i)
+        if not run.strip():
+            raise ResultError("lens %r has no 'run_id' — each lens must be a distinct, "
+                              "identifiable reviewing pass" % name)
+        if not verdict.strip():
+            raise ResultError("lens %r has no 'verdict' — a lens with no verdict did not run"
+                              % name)
+        covered.add(name)
+        runs.append(run)
+    dupes = sorted({r for r in runs if runs.count(r) > 1})
+    if dupes:
+        raise ResultError("two or more lenses share a run_id (%s) — distinct lenses must be "
+                          "distinct runs, not one pass relabelled." % dupes)
+    missing = [r for r in required if r not in covered]
+    if missing:
+        raise ResultError("missing required lens(es) for this tier: %s (declared: %s)"
+                          % (missing, sorted(covered)))
+    return sorted(covered)
+
+
 # ── Content hash ───────────────────────────────────────────────────────────
 def artifact_files(skill_dir):
     """Sorted [(relpath, filehash)] for every content file under skill_dir.
@@ -346,8 +396,24 @@ def check(skill_dir, tiers):
         return False, ("review_verdict %r not in tier '%s' allowed set %s"
                        % (att.get("review_verdict"), tier, allowed))
 
-    return True, ("attested current: tier=%s verdict=%s findings=%s run=%s"
-                  % (tier, att.get("verdict"), cf, att.get("run_id")))
+    # Lens-coverage belt: attest enforces this on write, but re-assert it here so a legacy
+    # attestation (predating the gate — no lenses_covered) or a tampered one can't pass a tier
+    # that now requires reviewing passes. (Human overrides return above, exempt by design.)
+    required_lenses = sorted(set(bar.get("required_lenses") or []))
+    if required_lenses:
+        covered = att.get("lenses_covered")
+        if not isinstance(covered, list):
+            return False, ("attestation predates the lens-coverage gate (no lenses_covered) "
+                           "but tier '%s' requires %s — re-run the review and re-attest."
+                           % (tier, required_lenses))
+        missing = [r for r in required_lenses if r not in covered]
+        if missing:
+            return False, ("attestation is missing required lens(es) for tier '%s': %s "
+                           "(covered: %s) — re-review and re-attest." % (tier, missing, sorted(covered)))
+
+    return True, ("attested current: tier=%s verdict=%s findings=%s lenses=%s run=%s"
+                  % (tier, att.get("verdict"), cf, len(att.get("lenses_covered") or []),
+                     att.get("run_id")))
 
 
 # ── Skill discovery ────────────────────────────────────────────────────────
@@ -464,7 +530,8 @@ def cmd_attest(args):
                  "than trusting a typed number. (not logged: nothing was reviewed)")
             return 2
         try:
-            counts = derive_counts(load_result(args.from_result, skill_dir))
+            result_doc = load_result(args.from_result, skill_dir)
+            counts = derive_counts(result_doc)
         except ResultError as e:
             warn("attest REFUSED: %s" % e)
             return 2
@@ -546,6 +613,14 @@ def cmd_attest(args):
     if args.tier not in tiers:
         warn("attest: unknown --tier %r (known: %s)" % (args.tier, ", ".join(sorted(tiers))))
         return 2
+    # Lens-coverage gate: a full pass must DECLARE the tier's required reviewing passes, each
+    # a distinct run — so "I ran fewer lenses" is structurally refused, not merely discouraged
+    # in prose. Derived from the same result artifact the counts came from (never a typed list).
+    try:
+        covered_lenses = check_lens_coverage(result_doc, tiers[args.tier].get("required_lenses", []))
+    except ResultError as e:
+        warn("attest REFUSED: %s (logged to history)" % e)
+        return 2
     data = {
         "skill": os.path.basename(skill_dir.rstrip(os.sep)),
         "artifact_hash": artifact_hash,
@@ -558,6 +633,7 @@ def cmd_attest(args):
         "serious_candidates": eff_serious,
         "human_review_pending": eff_human,
         "human_review_adjudication": (args.adjudication or None) if eff_human else None,
+        "lenses_covered": covered_lenses,
         "run_id": args.run_id,
         "reviewed_at": reviewed_at,
         "reviewer_version": REVIEWER_VERSION,

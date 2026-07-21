@@ -1,8 +1,10 @@
 {
   "_comment": "Review-tier bars enforced by review_gate.check(). A tier maps to the minimum bar a PASSING attestation must clear: verdict, ceiling on confirmed findings, and (optionally) an allow-list of review_verdict strings. Override the path with env REVIEW_TIERS. See review_gate.py.",
 
-  "trivial":  {"min_verdict": "pass", "max_confirmed_findings": 9999, "note": "any passing attestation"},
-  "standard": {"min_verdict": "pass", "max_confirmed_findings": 3},
-  "high":     {"min_verdict": "pass", "max_confirmed_findings": 0, "require_review_verdict_in": ["solid-with-fixes"]},
-  "critical": {"min_verdict": "pass", "max_confirmed_findings": 0, "require_review_verdict_in": ["solid-with-fixes"]}
+  "_lens_comment": "required_lenses: the reviewing passes a review result must DECLARE (each as a distinct run) for a full-pass attestation at this tier. Enforced by review_gate.check_lens_coverage — a findings[] list alone does not prove the review's breadth (a 3-lens and a 6-lens pass produce the same shape), so lens coverage is now checked in code, not left to prose. Names are the reviewer's lens labels; edit the sets freely per your process. Empty = no lens requirement.",
+
+  "trivial":  {"min_verdict": "pass", "max_confirmed_findings": 9999, "required_lenses": [], "note": "any passing attestation"},
+  "standard": {"min_verdict": "pass", "max_confirmed_findings": 3, "required_lenses": ["correctness", "security", "dx", "packaging"]},
+  "high":     {"min_verdict": "pass", "max_confirmed_findings": 0, "require_review_verdict_in": ["solid-with-fixes"], "required_lenses": ["correctness", "security", "dx", "packaging", "adversarial-verify"]},
+  "critical": {"min_verdict": "pass", "max_confirmed_findings": 0, "require_review_verdict_in": ["solid-with-fixes"], "required_lenses": ["correctness", "security", "dx", "packaging", "adversarial-verify", "completeness"]}
 }

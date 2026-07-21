@@ -26,6 +26,36 @@ that hash and **refuses if a single byte drifted**. So:
 - You **cannot launder a failing review** — `attest` refuses any verdict that isn't `pass`.
 - You **cannot ship on an incremental review** — an incremental `attest` writes *nothing* to the
   attestation; it only appends to the history log, so the gate still sees "no attestation."
+- You **cannot ship on an under-scoped review** — a full pass must DECLARE the tier's required
+  reviewing passes (lenses), each as a distinct run; a `findings[]` list alone no longer proves the
+  review's breadth. See **Lens coverage** below.
+
+## Lens coverage — the review's *breadth* is enforced, not just its *existence*
+
+`attest` derives the findings count from a result artifact, but a findings list alone can't tell a
+3-lens pass from a 6-lens pass — so "I ran fewer lenses" used to be invisible to the gate (the exact
+drift the gate kills, one level up). Now each tier declares `required_lenses` in
+[review-tiers.json](review-tiers.json), and the result artifact must carry a `lenses[]`:
+
+```json
+"lenses": [
+  {"lens": "correctness", "run_id": "<distinct id>", "verdict": "pass"},
+  {"lens": "security",    "run_id": "<distinct id>", "verdict": "concerns"},
+  {"lens": "dx",          "run_id": "<distinct id>", "verdict": "pass"},
+  {"lens": "packaging",   "run_id": "<distinct id>", "verdict": "pass"}
+]
+```
+
+`check_lens_coverage` refuses the attestation unless every required lens is present, each with a
+`verdict` (a lens with none didn't run) and a **distinct `run_id`** (so one pass can't be relabelled
+as several). `check` re-asserts it, so a legacy attestation (predating the gate, no `lenses_covered`)
+is re-locked at any lens-requiring tier until re-reviewed. Default tiers: `standard` requires
+correctness / security / dx / packaging; `high` adds adversarial-verify; `critical` adds
+completeness. Edit the sets to fit your process — the *enforcement* is code; the *taxonomy* is data.
+
+**The honest limit** (same as the rest of the gate): a model can still forge distinct run-ids for
+lenses it didn't run. That's a deliberate, visible act of fabrication — not the accidental omission
+the gate exists to prevent. The bar is that under-scoping now requires lying, not just forgetting.
 
 ## The enforcement stack (where each layer sits)
 

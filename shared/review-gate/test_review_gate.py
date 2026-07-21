@@ -41,8 +41,15 @@ def make_skill(files):
     return d
 
 
+# The full lens set — a superset covering every tier's required_lenses, so helper-built
+# attestations/results satisfy the lens-coverage gate by default. Violation tests pass a
+# narrower/short set explicitly.
+ALL_LENSES = ["correctness", "security", "dx", "packaging", "adversarial-verify", "completeness"]
+
+
 def attest(skill_dir, tier="standard", verdict="pass",
-           review_verdict="solid-with-fixes", findings=0, run_id="run-1"):
+           review_verdict="solid-with-fixes", findings=0, run_id="run-1",
+           lenses_covered=None):
     """Write an attestation keyed to the CURRENT content (via the library)."""
     data = {
         "skill": os.path.basename(skill_dir),
@@ -52,6 +59,7 @@ def attest(skill_dir, tier="standard", verdict="pass",
         "verdict": verdict,
         "review_verdict": review_verdict,
         "confirmed_findings": findings,
+        "lenses_covered": ALL_LENSES if lenses_covered is None else lenses_covered,
         "run_id": run_id,
         "reviewed_at": "2026-07-09T00:00:00Z",
         "reviewer_version": "1",
@@ -59,11 +67,18 @@ def attest(skill_dir, tier="standard", verdict="pass",
     rg.write_attestation(skill_dir, data)
 
 
+def _default_lenses():
+    """One declared reviewing pass per lens, each a distinct run_id (satisfies coverage)."""
+    return [{"lens": n, "run_id": "run-%s" % n, "verdict": "pass"} for n in ALL_LENSES]
+
+
 def write_result(skill_dir, findings=None, artifact_hash=None, scope="full",
-                 name="test-result.json"):
+                 name="test-result.json", lenses="__default__"):
     """Write a review-result artifact under reviews/ (excluded from the hash).
 
-    `findings` is the raw list the gate recomputes its counts from.
+    `findings` is the raw list the gate recomputes its counts from. `lenses` is the declared
+    reviewing-pass coverage; default is the full set (distinct run_ids). Pass an explicit list
+    (or None to omit the key entirely) to exercise the lens-coverage gate.
     """
     rdir = os.path.join(skill_dir, "reviews", "results")
     os.makedirs(rdir, exist_ok=True)
@@ -72,6 +87,10 @@ def write_result(skill_dir, findings=None, artifact_hash=None, scope="full",
                "artifact_hash": (artifact_hash if artifact_hash is not None
                                  else rg.compute_artifact_hash(skill_dir)),
                "findings": [] if findings is None else findings}
+    if lenses == "__default__":
+        payload["lenses"] = _default_lenses()
+    elif lenses is not None:
+        payload["lenses"] = lenses
     with open(path, "w") as f:
         json.dump(payload, f)
     return path
@@ -698,6 +717,73 @@ def main():
         write_result(by, [serious], name="another.json")
         check("results under reviews/ do not change the artifact hash",
               rg.compute_artifact_hash(by), h_before)
+
+        # ── LENS-COVERAGE GATE: a full pass must DECLARE the tier's required lenses ──
+        # (full coverage via the default helper is exercised throughout above; here the violations)
+        sl1 = skill({"SKILL.md": "lens", "run.py": "x=1\n"})
+        short = write_result(sl1, [low()], lenses=[
+            {"lens": "correctness", "run_id": "r1", "verdict": "pass"},
+            {"lens": "security", "run_id": "r2", "verdict": "pass"},
+            {"lens": "dx", "run_id": "r3", "verdict": "pass"}])          # missing 'packaging'
+        p = run_attest(sl1, scope="full", verdict="pass", tier="standard", from_result=short)
+        check("standard attest REFUSED when a required lens is missing", p.returncode, 2)
+        ok("  no attestation written on missing-lens", rg.load_attestation(sl1) is None)
+
+        sl2 = skill({"SKILL.md": "lens2", "run.py": "x=1\n"})
+        collide = write_result(sl2, [low()], lenses=[
+            {"lens": "correctness", "run_id": "same", "verdict": "pass"},
+            {"lens": "security", "run_id": "same", "verdict": "pass"},   # shared run_id
+            {"lens": "dx", "run_id": "r3", "verdict": "pass"},
+            {"lens": "packaging", "run_id": "r4", "verdict": "pass"}])
+        p = run_attest(sl2, scope="full", verdict="pass", tier="standard", from_result=collide)
+        check("attest REFUSED when two lenses share a run_id", p.returncode, 2)
+
+        sl3 = skill({"SKILL.md": "lens3", "run.py": "x=1\n"})
+        noverd = write_result(sl3, [low()], lenses=[
+            {"lens": "correctness", "run_id": "r1", "verdict": "pass"},
+            {"lens": "security", "run_id": "r2", "verdict": "pass"},
+            {"lens": "dx", "run_id": "r3", "verdict": "pass"},
+            {"lens": "packaging", "run_id": "r4"}])                      # no verdict -> did not run
+        p = run_attest(sl3, scope="full", verdict="pass", tier="standard", from_result=noverd)
+        check("attest REFUSED when a lens has no verdict", p.returncode, 2)
+
+        sl4 = skill({"SKILL.md": "lens4", "run.py": "x=1\n"})
+        nolens = write_result(sl4, [low()], lenses=None)                 # omits 'lenses' entirely
+        p = run_attest(sl4, scope="full", verdict="pass", tier="standard", from_result=nolens)
+        check("attest REFUSED when the result declares no lenses[]", p.returncode, 2)
+
+        sl5 = skill({"SKILL.md": "lens5", "run.py": "x=1\n"})            # default = full coverage
+        p = run_attest(sl5, scope="full", verdict="pass", tier="standard", findings=1)
+        check("attest PASSES with full lens coverage", p.returncode, 0)
+        ok("  attestation records lenses_covered",
+           bool((rg.load_attestation(sl5) or {}).get("lenses_covered")))
+
+        # check() belt: a legacy attestation (no lenses_covered) fails a lens-required tier
+        sl6 = skill({"SKILL.md": "legacy", "run.py": "x=1\n"})
+        rg.write_attestation(sl6, {
+            "skill": "legacy", "artifact_hash": rg.compute_artifact_hash(sl6),
+            "review_tier": "standard", "review_scope": "full", "verdict": "pass",
+            "review_verdict": "solid-with-fixes", "confirmed_findings": 0,
+            "run_id": "old", "reviewed_at": "2026-01-01T00:00:00Z", "reviewer_version": "1"})
+        okc, reason = rg.check(sl6, tiers)
+        ok("check() REJECTS a legacy attestation (no lenses_covered) at standard", not okc)
+        ok("  reason points to re-attest", "re-attest" in reason)
+
+        sl7 = skill({"SKILL.md": "partial", "run.py": "x=1\n"})
+        attest(sl7, tier="standard", lenses_covered=["correctness", "security"])
+        ok("check() REJECTS partial lens coverage at standard", not rg.check(sl7, tiers)[0])
+
+        sl8 = skill({"SKILL.md": "triv", "run.py": "x=1\n"})
+        attest(sl8, tier="trivial", lenses_covered=[])
+        ok("trivial tier passes with no lens coverage (none required)", rg.check(sl8, tiers)[0])
+
+        sl9 = skill({"SKILL.md": "hi", "run.py": "x=1\n"})
+        attest(sl9, tier="high", findings=0, review_verdict="solid-with-fixes",
+               lenses_covered=["correctness", "security", "dx", "packaging"])  # missing adversarial-verify
+        ok("high tier REJECTS the standard-4 set (needs adversarial-verify)",
+           not rg.check(sl9, tiers)[0])
+        attest(sl9, tier="high", findings=0, review_verdict="solid-with-fixes")  # default = full set
+        ok("high tier PASSES with the full lens set", rg.check(sl9, tiers)[0])
 
     finally:
         for d in tmpdirs:
