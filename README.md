@@ -1,7 +1,7 @@
 # skill-generator
 
-A harness for building **LLM-judgment pipelines you can trust** as self-contained Claude Code
-skills. Deterministic code owns state and safety; LLM judges make the fuzzy calls behind a
+A harness for building **&mdash; and hardening &mdash; LLM-judgment pipelines you can trust** as
+self-contained Claude Code skills. Deterministic code owns state and safety; LLM judges make the fuzzy calls behind a
 validated JSON contract; and a skill **can't ship until it passes a code-enforced, hash-keyed
 adversarial review** — governance the code enforces, not a prose "please review first." The skills
 built this way tailor an artifact per target or decide what to act on next, always with a human in
@@ -16,6 +16,11 @@ private job-search system this pattern was proven in — discovery, scoring, ré
 source-grounding gates I run on my own data. The pattern is generalized so the same
 machinery applies across domains (recruiting, procurement/RFP, grants, sales outreach, moderation,
 triage).
+
+**It hardens skills you already have, too** — not only ones built here. Point the review gate and
+fail-closed guards at an existing skill and the same enforcement takes hold: it can't ship until
+it's passed the adversarial review, and it can't send, submit, or leak at runtime. Build a new
+judgment pipeline or harden an inherited one — it's the same governance either way.
 
 I built this to run entirely on my Claude Code subscription and without incurring additional costs:
 the shipped skills judge with Claude Code subagents rather than a billable Anthropic API key, so a

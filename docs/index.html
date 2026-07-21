@@ -189,6 +189,21 @@
   .limit p b { color:var(--ink); font-weight:600; }
   .limit p em { font-style:italic; color:var(--ink); }
 
+  /* inner loops + feedback edges */
+  .loops { display:flex; flex-direction:column; gap:12px; }
+  .loop {
+    position:relative; padding:15px 18px 15px 46px; background:var(--panel); border:1px solid var(--line);
+    border-radius:11px; font-size:14px; line-height:1.56; color:var(--muted); box-shadow:var(--shadow);
+  }
+  .loop b { color:var(--ink); font-weight:600; }
+  .loop code {
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:12.5px; color:var(--steel);
+    background:var(--steel-soft); padding:1px 5px; border-radius:4px; white-space:nowrap;
+  }
+  .loop::before {
+    content:"\21BB"; position:absolute; left:17px; top:13px; font-size:17px; color:var(--gold); font-weight:600;
+  }
+
   .fade { opacity:0; transform:translateY(8px); animation:rise .7s cubic-bezier(.2,.7,.2,1) forwards; }
   .fade:nth-child(2){animation-delay:.05s}.fade:nth-child(3){animation-delay:.1s}
   @keyframes rise { to { opacity:1; transform:none; } }
@@ -241,7 +256,7 @@
       <div class="grid">
         <a class="cap pub" href="https://github.com/malikwashington/skill-generator" target="_blank" rel="noopener">
           <span class="name">skill-generator</span>
-          <span class="desc">The governance that lets any of these be trusted: a hash-keyed review gate a skill can't ship without, plus fail-closed guards that hard-block send / submit / secret surfaces. The pipeline stops at the submit button, always.</span>
+          <span class="desc">The governance that lets any of these be trusted: a hash-keyed review gate a skill can't ship without, plus fail-closed guards that hard-block send / submit / secret surfaces. Build a new skill or harden one you already have &mdash; same enforcement either way.</span>
           <span class="chip">Public</span>
         </a>
         <div class="cap">
@@ -263,6 +278,20 @@
       <div class="limit">
         <span class="lbl">The threat model, honestly</span>
         <p><b>These guards defend against untrusted <em>external</em> input</b> &mdash; a poisoned job description can't hijack a judge or reach a document. They do not defend against <b>me</b>: grounding proves a claim traces to the profile, not that the profile is <em>true</em>. The system was never designed or tested to catch an operator who misrepresents themselves &mdash; that integrity is the operator's to hold, by design.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- LOOPS -->
+  <section>
+    <div class="wrap">
+      <div class="band-head"><span class="no">&#8635;</span><h2>Loops, not a line</h2></div>
+      <p class="band-sub">The clean 01-07 sequence below is a simplification. Inside it, almost nothing runs once &mdash; stages iterate, and findings route backward to whatever stage owns them. That feedback is the design, not an afterthought; it's where most of the real engineering lives.</p>
+      <div class="loops">
+        <div class="loop"><b>Every judgment is a loop.</b> No judge is trusted once: each runs N times and averages, and a wide split re-judges rather than smoothing over. (Score, Decide)</div>
+        <div class="loop"><b>Generate is a cycle, not a step.</b> <code>tailor &rarr; provenance &rarr; build</code> &mdash; an unsupported claim or an under-filled page loops back to re-tailor and re-gate until it holds. <code>compose</code> loops inside that: measure the page, cut, measure again.</div>
+        <div class="loop"><b>Findings route backward.</b> The critique and blind-review gates don't just pass or fail &mdash; each finding is sent to the stage that owns it (the profile, the tailoring, or the build) and the package is rebuilt until it's clean.</div>
+        <div class="loop"><b>The system feeds itself.</b> Gaps and enrichment loop back into the <b>profile</b>; de-listing loops back into the records; the next cycle scores and tailors against a sharper profile than the last. The outer loop is the whole point.</div>
       </div>
     </div>
   </section>
@@ -374,7 +403,7 @@
       <div class="ex">
         <a class="repo" href="https://github.com/malikwashington/skill-generator" target="_blank" rel="noopener">
           <span class="rn">skill-generator <span class="ar">&#8599;</span></span>
-          <span class="rd">The factory and its governance &mdash; the review gate and fail-closed guards that let any of these skills be trusted. A skill isn't done until it passes.</span>
+          <span class="rd">The factory and its governance &mdash; the review gate and fail-closed guards that let any skill be trusted, whether you build it here or harden one you already have. A skill isn't done until it passes.</span>
           <span class="rmap">maps to &middot; <b>the trust spine</b></span>
         </a>
         <a class="repo" href="https://github.com/malikwashington/tailor-artifacts" target="_blank" rel="noopener">
@@ -393,7 +422,7 @@
 
   <footer>
     <div class="wrap">
-      <p class="note"><b>Why only three are public.</b> The full pipeline runs privately on my own job search &mdash; my profile, my data, my decisions. What's open-source is a clean, standalone sample of the pattern, not the whole system. The depth is real; most of it just isn't mine to publish.</p>
+      <p class="note"><b>Why only three are public.</b> It's all mine to open-source &mdash; this isn't about permission. The full pipeline is a personal tool wired to my own data (profile, applications, decisions), and scrubbing that PII out of every corner isn't worth the hassle for something I run for myself. So what's public is a clean, standalone sample of the pattern; the rest stays private for practical reasons, not proprietary ones.</p>
       <p class="note">Every capability above shares one contract: code owns state and safety, a judge makes the call behind a validated schema, and a human decides before anything irreversible. Build one well and the next is the same kernel pointed somewhere new &mdash; which is how 25 of them came to exist.</p>
     </div>
   </footer>

@@ -144,3 +144,10 @@ traces to the profile, **not that the profile is true**. Catching a user who mis
 **07 · Learn** — the loop closes; each cycle feeds the next:
 - **gaps loop** — every term the scorer can't yet credit surfaces with demand evidence into a growth tracker (the Profile Gaps sheet); the market's own signal, turned into a to-do list.
 - **claimed vs demonstrated** — the sheet separates a skill I'd *claim* is mine from one *demonstrated* in the profile. The first prompts fleshing out the profile until the claim is defensible; the second (a genuine gap) prompts growth. Either way the profile grows only on demonstrated experience, so its claims stay defensible — the same standard `compose`'s fail-safe enforces on the page.
+
+### Loops, not a line
+The 01–07 order above is a simplification; the feedback is the design. Almost nothing runs once:
+- every judge runs **N times and averages**, re-judging on disagreement rather than smoothing it over;
+- **generate is a cycle** — `tailor → provenance → build`, looping back to re-tailor on an unsupported claim or an under-filled page, with `compose` looping inside that (measure the page, cut, measure again);
+- the **critique and blind-review gates route each finding backward** to the stage that owns it (profile, tailoring, or build) and rebuild until clean;
+- **gaps, enrichment, and de-listing all feed back** into the profile and the records the next cycle runs on — the outer loop is the whole point.
