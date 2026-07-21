@@ -71,6 +71,8 @@ Skills built with this factory, each a standalone repo you can run:
 - `PATTERN.md` — the reusable kernel spec.
 - `REVIEW.md` — the rigorous-review structure (rubric + failure-mode checklist + how to run it).
 - `USE-CASES.md` — the pattern re-targeted across domains, and each stage as a standalone skill.
-- `builds/{1,2,3}/SPEC.md` — per-skill goal, scope, and definition-of-done.
+- `builds/` — one folder per target skill with its goal, scope, and definition-of-done:
+  `1-job-search-skill/`, `2-high-stakes-wedge/`, `3-tailored-artifacts/` (each a `SPEC.md`),
+  and `4-rca-tool/` (a pointer README — that build's docs travel with its code).
 - `shared/` — reusable kernel components: the guard/gate hooks, the review gate, the SKILL template.
 - `CLAUDE.md` — working conventions for building a skill in this repo.

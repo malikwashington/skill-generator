@@ -861,6 +861,67 @@ def main():
         attest(sl9, tier="high", findings=0, review_verdict="solid-with-fixes")  # default = full set
         ok("high tier PASSES with the full lens set", rg.check(sl9, tiers)[0])
 
+        # ── Content hash via GIT (the robust path): honors .gitignore, so EVERY gitignored
+        #    transient is excluded as a CLASS — the invariant the denylist could never assert.
+        import subprocess as _sp
+        gskill = tempfile.mkdtemp(); tmpdirs.append(gskill)
+        if _sp.run(["git", "-C", gskill, "init", "-q"]).returncode == 0:
+            with open(os.path.join(gskill, "SKILL.md"), "w") as f: f.write("demo\n")
+            with open(os.path.join(gskill, "run.py"), "w") as f: f.write("x=1\n")
+            with open(os.path.join(gskill, ".gitignore"), "w") as f:
+                f.write(".pytest_cache/\n.DS_Store\n*.tmp\n.mypy_cache/\n")
+            ok("git work tree takes the git shippable path", rg._shippable_via_git(gskill) is not None)
+            h_git = rg.compute_artifact_hash(gskill)
+            # gitignored files of ARBITRARY names/dirs must NOT change the hash (the class fix)
+            os.makedirs(os.path.join(gskill, ".pytest_cache", "v"), exist_ok=True)
+            with open(os.path.join(gskill, ".pytest_cache", "v", "nodeids"), "w") as f: f.write("x")
+            with open(os.path.join(gskill, ".DS_Store"), "w") as f: f.write("junk")
+            with open(os.path.join(gskill, "scratch.tmp"), "w") as f: f.write("junk")
+            os.makedirs(os.path.join(gskill, ".mypy_cache"), exist_ok=True)
+            with open(os.path.join(gskill, ".mypy_cache", "z"), "w") as f: f.write("junk")
+            ok("git hash ignores ALL gitignored transients as a class",
+               rg.compute_artifact_hash(gskill) == h_git)
+            # a NEW non-ignored source file MUST change the hash
+            with open(os.path.join(gskill, "helper.py"), "w") as f: f.write("y=2\n")
+            ok("git hash changes when a shippable file is added",
+               rg.compute_artifact_hash(gskill) != h_git)
+            # a nested, non-ignored reviews/ file IS content (the earlier depth-scope fix holds here too)
+            h2 = rg.compute_artifact_hash(gskill)
+            os.makedirs(os.path.join(gskill, "lib", "reviews"), exist_ok=True)
+            with open(os.path.join(gskill, "lib", "reviews", "loader.py"), "w") as f: f.write("import os\n")
+            ok("git hash covers a nested non-ignored reviews/ file",
+               rg.compute_artifact_hash(gskill) != h2)
+            # the gate's OWN root outputs never enter the hash even when NOT gitignored (defensive)
+            h3 = rg.compute_artifact_hash(gskill)
+            with open(os.path.join(gskill, rg.ATTEST_NAME), "w") as f: f.write("{}")
+            os.makedirs(os.path.join(gskill, "reviews", "results"), exist_ok=True)
+            with open(os.path.join(gskill, "reviews", "results", "r.json"), "w") as f: f.write("{}")
+            ok("git hash skips root attestation + reviews/ even when not gitignored",
+               rg.compute_artifact_hash(gskill) == h3)
+
+        # ── SUBDIR skill inside a larger git repo: git emits paths relative to the -C dir, so
+        #    the hash must scope to the subdir and cover its real files (regression: without
+        #    --full-name every path mis-resolved -> empty set -> sha256("") for ALL subdir skills,
+        #    so one attestation validated any skill and drift went undetected).
+        repo = tempfile.mkdtemp(); tmpdirs.append(repo)
+        if _sp.run(["git", "-C", repo, "init", "-q"]).returncode == 0:
+            with open(os.path.join(repo, "top.txt"), "w") as f: f.write("repo root file\n")
+            skA = os.path.join(repo, "skills", "alpha"); os.makedirs(skA)
+            with open(os.path.join(skA, "SKILL.md"), "w") as f: f.write("alpha\n")
+            with open(os.path.join(skA, "run.py"), "w") as f: f.write("a=1\n")
+            skB = os.path.join(repo, "skills", "beta"); os.makedirs(skB)
+            with open(os.path.join(skB, "SKILL.md"), "w") as f: f.write("beta\n")
+            hA = rg.compute_artifact_hash(skA)
+            hB = rg.compute_artifact_hash(skB)
+            empty = rg.hashlib.sha256().hexdigest()
+            ok("subdir skill hash is non-empty (not sha256 of nothing)", hA != empty)
+            ok("two distinct subdir skills hash DIFFERENTLY (cross-skill isolation)", hA != hB)
+            ok("subdir hash does not leak the repo-root file", "top.txt" not in
+               [rel for rel, _ in rg.artifact_files(skA)])
+            with open(os.path.join(skA, "run.py"), "w") as f: f.write("a=666  # post-review edit\n")
+            ok("editing a subdir skill's file changes its hash (drift caught)",
+               rg.compute_artifact_hash(skA) != hA)
+
     finally:
         for d in tmpdirs:
             shutil.rmtree(d, ignore_errors=True)

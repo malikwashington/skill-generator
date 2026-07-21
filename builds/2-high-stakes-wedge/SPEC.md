@@ -1,6 +1,6 @@
 # Build 2 — high-stakes-wedge
 
-> **Shipped 2026-07-07 as TWO skills at `~/Desktop/skills/`** (names decided by Malik):
+> **Shipped 2026-07-07 as two skills** (docket-llm and blind-review):
 > **docket-llm** — this spec's engine (emit/ingest/verify/decide, rubric-driven, run-averaged,
 > audit records, human review queue; worked example: small-grants screening), and
 > **blind-review** — the worked-example screener elevated to its own skill (blind cold reader

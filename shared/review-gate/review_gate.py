@@ -36,24 +36,24 @@ Review-history log (`.review-history.jsonl`, at the skill root, append-only):
   deletes nothing, but `next-scope` reads it (when it is the most-recent event)
   to reset the cadence to a FULL review.
 """
-import sys, os, json, hashlib, argparse, tempfile, fnmatch
+import sys, os, json, hashlib, argparse, tempfile, fnmatch, subprocess
 
 ATTEST_NAME = ".review-attestation.json"
 HISTORY_NAME = ".review-history.jsonl"
 REVIEWER_VERSION = "1"
 
-# Content that is NOT part of the reviewed artifact — excluded from the hash so
-# that writing the attestation (or the review-history log, or CI review logs)
-# never changes the hash it is keyed to.
-EXCLUDE_NAMES = {ATTEST_NAME, HISTORY_NAME, "__pycache__", ".git"}
-EXCLUDE_DIRS = {"reviews", "__pycache__", ".git"}   # skill-discovery prune (pre-push); any depth
+# Skill-DISCOVERY prune set (used by pre-push to find skill dirs without descending into
+# noise). NOT the content-hash exclusion — that is the git-aware `artifact_files` + the
+# `_HASH_*` fallback sets below.
+EXCLUDE_DIRS = {"reviews", "__pycache__", ".git"}   # any depth; discovery only
 
-# Content-hash scoping (see artifact_files). The distinction is load-bearing: VCS/bytecode
-# caches are non-content at ANY depth, but the review gate's OWN outputs ('reviews/' and the
-# attestation + history files) are excluded ONLY at the skill root — a directory or file with
-# one of those names NESTED deeper (e.g. lib/reviews/loader.py) is real content and MUST be
-# hashed. Excluding them at any depth let post-attestation edits under a nested 'reviews/' go
-# undetected — a hole that defeats the whole drift guarantee.
+# Content-hash scoping for the non-git fallback walk (see artifact_files / _shippable_via_walk).
+# The git path honors .gitignore instead; these mirror its root-only rules for a bare dir. The
+# distinction is load-bearing: VCS/bytecode/test caches are non-content at ANY depth, but the
+# review gate's OWN outputs ('reviews/' and the attestation + history files) are excluded ONLY at
+# the skill root — a directory or file with one of those names NESTED deeper (e.g.
+# lib/reviews/loader.py) is real content and MUST be hashed, or a post-attestation edit under a
+# nested 'reviews/' would go undetected, defeating the drift guarantee.
 _HASH_PRUNE_ANYWHERE = {"__pycache__", ".pytest_cache", ".git"}
 _HASH_PRUNE_ROOT = {"reviews"}
 _HASH_SKIP_FILES_ROOT = {ATTEST_NAME, HISTORY_NAME}
@@ -88,7 +88,7 @@ def derive_counts(result):
     """Recompute the gate's counts FROM THE RAW FINDINGS. Never trust a summary.
 
     The gate blocks on CONFIRMED findings at their adversarially-CORRECTED severity, not
-    on raw RAISED severity (Malik, 2026-07-10). The skeptic panel exists precisely to
+    on raw RAISED severity (2026-07-10). The skeptic panel exists precisely to
     correct a reviewer's severity; gating on the raised number wastes that signal and lets
     a reviewer's 'medium' label block code the panel unanimously rated low -- contradicting
     the standing rule that lows are shippable. Disposition per finding:
@@ -280,19 +280,82 @@ def check_lens_coverage(result, required_lenses, skill_dir=None, reviewed_hash=N
 
 
 # ── Content hash ───────────────────────────────────────────────────────────
-def artifact_files(skill_dir):
-    """Sorted [(relpath, filehash)] for every content file under skill_dir.
+def _hash_file(full):
+    """sha256 hex of a file's bytes, or None if unreadable (not content)."""
+    h = hashlib.sha256()
+    try:
+        with open(full, "rb") as f:
+            for chunk in iter(lambda: f.read(65536), b""):
+                h.update(chunk)
+    except OSError:
+        return None
+    return h.hexdigest()
 
-    The single enumeration of "what the artifact IS". Both the hash and the
-    override's coverage accounting read from here, so they can never disagree
-    about which files exist.
-    """
-    entries = []                                        # (relpath, filehash)
+
+def _shippable_via_git(skill_dir):
+    """[(relpath, filehash)] for the files that would SHIP from skill_dir, when it is a git work
+    tree: tracked + untracked-but-not-ignored, honoring .gitignore/.git/info/exclude. Returns
+    None if skill_dir isn't a git work tree or git is unavailable.
+
+    This is the primary, robust definition of "what the artifact IS": it covers exactly what a
+    clone receives and excludes EVERY gitignored transient (build caches, .pytest_cache,
+    .DS_Store, editor cruft) as a CLASS — no denylist to keep chasing. The gate's own root
+    outputs (attestation/history/reviews) are gitignored in a real skill, so they drop out here;
+    we also skip the root attestation/history files defensively (a self-referential hash is
+    impossible even if a user forgets to ignore them)."""
+    try:
+        top = subprocess.run(["git", "-C", skill_dir, "rev-parse", "--show-toplevel"],
+                             capture_output=True, text=True, timeout=30)
+        if top.returncode != 0:
+            return None
+        # --full-name -> names are REPO-TOP-relative (so the join onto repo_top below is right
+        # even when skill_dir is a SUBDIR of a larger repo); `-- .` scopes the listing to files
+        # under skill_dir. Without --full-name git prints subdir-relative names and the join
+        # silently mis-resolves every path, dropping them all -> empty hash for any subdir skill.
+        r = subprocess.run(["git", "-C", skill_dir, "ls-files", "-z", "--full-name",
+                            "--cached", "--others", "--exclude-standard", "--", "."],
+                           capture_output=True, text=True, timeout=30)
+        if r.returncode != 0:
+            return None
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return None
+    # git reports a realpath'd toplevel; realpath our side too so a symlinked prefix
+    # (e.g. macOS /var -> /private/var) doesn't make every relpath escape with '..'.
+    repo_top = os.path.realpath(top.stdout.strip())
+    skill_abs = os.path.realpath(skill_dir)
+    entries = []
+    for name in r.stdout.split("\0"):
+        if not name:
+            continue
+        full = os.path.realpath(os.path.join(repo_top, name))
+        rel = os.path.relpath(full, skill_abs)
+        if rel.startswith(".."):                        # outside this skill subtree
+            continue
+        rel = rel.replace(os.sep, "/")
+        # Defensively drop the gate's OWN root outputs even if a user forgot to gitignore them
+        # (else writing evidence/attestation would perturb the very hash they key). Root only —
+        # a nested reviews/ or attestation-named file is real content and stays hashed.
+        if rel.split("/", 1)[0] in _HASH_PRUNE_ROOT:          # root 'reviews/' tree
+            continue
+        if "/" not in rel and rel in _HASH_SKIP_FILES_ROOT:   # root attestation/history file
+            continue
+        fh = _hash_file(full)
+        if fh is not None:
+            entries.append((rel, fh))
+    entries.sort(key=lambda e: e[0])
+    return entries
+
+
+def _shippable_via_walk(skill_dir):
+    """Git-independent fallback: os.walk with a maintained denylist. Used only when skill_dir is
+    not a git work tree (e.g. a bare fixture). Less robust than the git path — it can only
+    exclude the names it knows — so the git path is preferred whenever available."""
+    entries = []
     root_abs = os.path.abspath(skill_dir)
     for root, dirs, files in os.walk(skill_dir):
         at_root = os.path.abspath(root) == root_abs
-        # prune non-content dirs in-place. VCS/bytecode caches go at any depth; the gate's own
-        # 'reviews/' tree only at the skill root (a NESTED 'reviews/' is content — must be hashed).
+        # prune non-content dirs in-place. VCS/bytecode/test caches go at any depth; the gate's
+        # own 'reviews/' tree only at the skill root (a NESTED 'reviews/' is content, must hash).
         dirs[:] = [d for d in dirs if d not in _HASH_PRUNE_ANYWHERE
                    and not (at_root and d in _HASH_PRUNE_ROOT)]
         for fn in files:
@@ -300,18 +363,26 @@ def artifact_files(skill_dir):
                 continue
             if at_root and fn in _HASH_SKIP_FILES_ROOT:  # attestation/history: root only
                 continue
-            full = os.path.join(root, fn)
-            rel = os.path.relpath(full, skill_dir).replace(os.sep, "/")
-            h = hashlib.sha256()
-            try:
-                with open(full, "rb") as f:
-                    for chunk in iter(lambda: f.read(65536), b""):
-                        h.update(chunk)
-            except OSError:
-                continue                                # unreadable: skip (not content)
-            entries.append((rel, h.hexdigest()))
+            rel = os.path.relpath(os.path.join(root, fn), skill_dir).replace(os.sep, "/")
+            fh = _hash_file(os.path.join(root, fn))
+            if fh is not None:
+                entries.append((rel, fh))
     entries.sort(key=lambda e: e[0])
     return entries
+
+
+def artifact_files(skill_dir):
+    """Sorted [(relpath, filehash)] for every SHIPPABLE file under skill_dir — the single
+    enumeration of "what the artifact IS" (both the hash and the override's coverage read it).
+
+    Prefers git (honors .gitignore, so all transient noise is excluded as a class); falls back
+    to a denylist walk only when skill_dir is not a git work tree.
+    """
+    via_git = _shippable_via_git(skill_dir)
+    # Empty is treated as "fall back to the walk", not as a valid answer: a real skill under
+    # review always has content (at minimum a SKILL.md), so an empty git result signals a git
+    # anomaly (or a mis-scoped listing) rather than a genuinely empty artifact — never hash "nothing".
+    return via_git if via_git else _shippable_via_walk(skill_dir)
 
 
 def compute_artifact_hash(skill_dir):

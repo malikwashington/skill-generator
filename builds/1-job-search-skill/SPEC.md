@@ -55,5 +55,5 @@ reviewing built packages as a recruiter would: resume + JD rubric only, no profi
 distinct from the critique gate, which is an informed mechanics check). Each is production-proven in the source (see
 PATTERN.md "Proven extensions") and ports cleanly later; none is needed for the v1 closed loop.
 
-**Done = passes [../../REVIEW.md](../../REVIEW.md) at "ready."** This build doubles as one of Malik's
+**Done = passes [../../REVIEW.md](../../REVIEW.md) at "ready."** This build doubles as one of the author's
 on-lane portfolio artifacts once genericized (user memory: `candidacy-gaps-goals`).

@@ -93,7 +93,7 @@ irrelevant because the model was never the one deciding.
 - `review-tiers.json` — the tier bars + each tier's `required_lenses`. Override path with `$REVIEW_TIERS`.
 - `review_gate_hook.py` — **Stop** hook; fail-open; nudges once per turn (honors `stop_hook_active`).
 - `pre-push` — git pre-push hook; fail-closed; recurses to find skills anywhere under the repo root.
-- `test_review_gate.py` — 156 offline checks; `test_orchestrate.py` — 18 more; `../hooks/test_guards.py` — 54; `../hooks/test_gate.py` — 15. No third-party deps.
+- `test_review_gate.py` — 165 offline checks; `test_orchestrate.py` — 18 more; `../hooks/test_guards.py` — 54; `../hooks/test_gate.py` — 15. No third-party deps.
 
 ## The attestation
 `<skill>/.review-attestation.json`, written **only** by `review_gate.py attest` — and *only* by a
@@ -132,11 +132,18 @@ attestation, and deletes nothing. `next-scope` reads it when it is the most-rece
 `full` — so a redesign→full is *computed*, not hand-picked.
 
 ## The content hash
-`compute_artifact_hash()` folds every file's `(relpath, sha256)` into one sha256, **sorted by
-relpath** so it's independent of walk order, and hashing the relpath too so a **rename** changes it.
-Excluded (so they never perturb the hash): the attestation itself, the `.review-history.jsonl` log,
-`reviews/`, `.git/`, `__pycache__/`, `*.pyc`. Writing the attestation *or* appending to the history
-log therefore never invalidates the hash it's keyed to (proven by test).
+`compute_artifact_hash()` folds every shippable file's `(relpath, sha256)` into one sha256, **sorted
+by relpath** so it's independent of walk order, and hashing the relpath too so a **rename** changes it.
+
+"Shippable" is defined by **what git would ship**: when the skill is a git work tree, the hash covers
+its tracked + untracked-but-not-ignored files, honoring `.gitignore`. That excludes **every** ignored
+transient — build/test caches (`__pycache__`, `.pytest_cache`, `.mypy_cache`), `.DS_Store`, editor
+cruft — as a *class*, rather than chasing a denylist (an earlier bug: `.pytest_cache` leaked in and
+spuriously staled attestations). For a non-git dir it falls back to an `os.walk` denylist. Either way
+the gate's own root outputs — the attestation, the `.review-history.jsonl` log, and the root
+`reviews/` tree — are excluded (root only: a *nested* `reviews/` is real content and IS hashed), so
+writing the attestation or appending to the history never invalidates the hash it's keyed to. All
+proven by test, including the invariant that a gitignored file of any name never moves the hash.
 
 ## Review tiers (the calibration)
 The **gate is universal**; the review **depth** scales to stakes. A passing attestation must clear

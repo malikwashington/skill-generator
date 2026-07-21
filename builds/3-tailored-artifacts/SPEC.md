@@ -21,5 +21,5 @@ guardrail. First use: venue/client sales-outreach — personalized outreach at s
 - **Lower polish is fine** (personal), but it still follows the pattern + the human gate (never auto-send).
 - Good place to prove the kernel generalizes beyond resumes with minimal new code.
 
-**Done = it produces tailored outreach Malik actually uses.** Run a *light* [../../REVIEW.md](../../REVIEW.md)
+**Done = it produces tailored outreach the author actually uses.** Run a *light* [../../REVIEW.md](../../REVIEW.md)
 pass (skip the public-packaging lens; keep robustness + the human-gate check).
