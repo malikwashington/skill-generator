@@ -1,4 +1,4 @@
-# The Worklist Pattern — the shared kernel
+# The Worklist Pattern — the shared core
 
 **One sentence:** deterministic code owns I/O, state, and merging, and delegates every *fuzzy
 decision* to LLM "judges" through a structured worklist contract — `emit` a batch of judgment
@@ -56,7 +56,7 @@ code ONE DAY after being fixed elsewhere. Walk this list while writing, before t
   guidance), never a raw traceback after partial mutation.
 
 ## Proven extensions (production-tested on the source, 2026-07)
-Optional modules, not part of the minimal kernel. Each is a candidate v2 feature for any skill built
+Optional modules, not part of the minimal core. Each is a candidate v2 feature for any skill built
 from the pattern; each earned its place by failing without it or paying for itself in the field.
 
 - **Cumulative merge on ingest.** An incremental batch MERGES into the graded set (this batch's ids

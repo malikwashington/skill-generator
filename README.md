@@ -4,18 +4,22 @@ A harness for building **LLM-judgment pipelines you can trust** as self-containe
 skills. Deterministic code owns state and safety; LLM judges make the fuzzy calls behind a
 validated JSON contract; and a skill **can't ship until it passes a code-enforced, hash-keyed
 adversarial review** — governance the code enforces, not a prose "please review first." The skills
-built this way screen a queue, tailor an artifact per target, or decide what to act on next, always
-with a human in the loop before any consequential action.
+built this way tailor an artifact per target or decide what to act on next, always with a human in
+the loop before any consequential action.
 
 **What ships in *this* repo is the governance** — the [review gate](shared/review-gate/) and the
 [fail-closed guards](shared/hooks/) — plus the *worklist pattern* it enforces ([PATTERN.md](PATTERN.md)).
-The runnable `emit → judge → ingest` engine lives in each shipped skill (below) and in the private
-production pipeline this was abstracted from: a job-search system (discovery → scoring → résumé
-tailoring → source-verification) I run on my own data. The pattern is generalized so the same
+The runnable `emit → judge → ingest` engine lives in each shipped skill (below) and in the larger
+private job-search system this pattern was proven in — discovery, scoring, résumé tailoring, and
+source-grounding gates I run on my own data. The pattern is generalized so the same
 machinery applies across domains (recruiting, procurement/RFP, grants, sales outreach, moderation,
 triage).
 
-## The kernel: the worklist pattern
+I built this to run entirely on my Claude Code subscription and without incurring additional costs:
+the shipped skills judge with Claude Code subagents rather than a billable Anthropic API key, so a
+full run adds nothing to my bill.
+
+## The core: the worklist pattern
 
 Deterministic code owns I/O, state, and merging; LLM "judges" handle every fuzzy decision through
 a structured contract. They meet at a JSON request/response schema — no business logic in prompts.
@@ -35,7 +39,17 @@ The judge is swappable and the logic is testable in isolation. Full spec: [PATTE
 
 ## What makes the judgment trustworthy
 
-The kernel ships with the reliability and safety primitives that make LLM judgment safe to build on:
+Two layers. **This repo ships the governance**, enforced in code here:
+
+- **An un-skippable review gate** ([shared/review-gate/](shared/review-gate/)) — a skill ships only
+  with a passing, hash-keyed review attestation; any post-review edit re-locks the gate. Enforced by
+  code (a finalize check + a git pre-push hook), not by a prose "please review first."
+- **PreToolUse guard/gate hooks** ([shared/hooks/](shared/hooks/)) — a portable, stdlib-only guard
+  that hard-blocks send/submit/secret-write surfaces with a hardcoded safety floor and fail-closed
+  semantics.
+
+**The worklist pattern prescribes the reliability primitives** — specified in
+[PATTERN.md](PATTERN.md) and implemented *inside each shipped skill*, not as an engine in this repo:
 
 - **Run-averaging + disagreement flags** — cancel model noise; surface where independent runs split
   rather than averaging the split away.
@@ -43,12 +57,6 @@ The kernel ships with the reliability and safety primitives that make LLM judgme
   or wrong-shape responses are rejected loud, never coerced.
 - **A human gate before any irreversible action** — the model prepares; a human disposes. Nothing
   auto-acts.
-- **An un-skippable review gate** ([shared/review-gate/](shared/review-gate/)) — a skill ships only
-  with a passing, hash-keyed review attestation; any post-review edit re-locks the gate. Enforced by
-  code (a finalize check + a git pre-push hook), not by a prose "please review first."
-- **PreToolUse guard/gate hooks** ([shared/hooks/](shared/hooks/)) — a portable, stdlib-only guard
-  that hard-blocks send/submit/secret-write surfaces with a hardcoded safety floor and fail-closed
-  semantics.
 
 The review methodology itself — a multi-agent, six-lens adversarial review with a failure-mode
 checklist — is in [REVIEW.md](REVIEW.md). No build is "done" until it passes.
@@ -68,11 +76,11 @@ Skills built with this factory, each a standalone repo you can run:
 
 ## Layout
 
-- `PATTERN.md` — the reusable kernel spec.
+- `PATTERN.md` — the reusable core spec.
 - `REVIEW.md` — the rigorous-review structure (rubric + failure-mode checklist + how to run it).
 - `USE-CASES.md` — the pattern re-targeted across domains, and each stage as a standalone skill.
 - `builds/` — one folder per target skill with its goal, scope, and definition-of-done:
   `1-job-search-skill/`, `2-high-stakes-wedge/`, `3-tailored-artifacts/` (each a `SPEC.md`),
   and `4-rca-tool/` (a pointer README — that build's docs travel with its code).
-- `shared/` — reusable kernel components: the guard/gate hooks, the review gate, the SKILL template.
+- `shared/` — reusable core components: the guard/gate hooks, the review gate, the SKILL template.
 - `CLAUDE.md` — working conventions for building a skill in this repo.

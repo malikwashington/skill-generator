@@ -1,6 +1,6 @@
 # CLAUDE.md — skill-generator
 
-A factory that turns one proven kernel — the **worklist pattern** ([PATTERN.md](PATTERN.md)) —
+A factory that turns one proven core — the **worklist pattern** ([PATTERN.md](PATTERN.md)) —
 into production-grade, rigorously-reviewed Claude Code Skills. It was abstracted from a real,
 hand-built pipeline; the job here is to generalize that pipeline's stages so they apply to other
 use cases ([USE-CASES.md](USE-CASES.md) maps the domains — the full workflow re-targeted, and each
@@ -25,7 +25,7 @@ Each build has a `SPEC.md` (goal, tight-core scope, definition-of-done).
 2. **Ship a tight CORE, not "everything."** The #1 lesson from the readiness review: insisting on the
    whole thing (incl. the Google Sheets/Drive/Apps-Script glue) is what blocks shipping. Each v1 =
    the minimal closed loop that delivers the value; projections, cosmetics, and orchestration are v2.
-3. **The kernel is the worklist pattern.** Logic in code, judgment in the judge, `emit -> judge ->
+3. **The core is the worklist pattern.** Logic in code, judgment in the judge, `emit -> judge ->
    ingest`; reliability primitives; a JSON source-of-state with dedup; a HUMAN GATE before any
    irreversible action. Read [PATTERN.md](PATTERN.md) before building.
 4. **Review rigorously, gate on it.** No build is "done" until it passes [REVIEW.md](REVIEW.md) (the
@@ -44,8 +44,8 @@ Each build has a `SPEC.md` (goal, tight-core scope, definition-of-done).
 4. Close P0/P1 gaps; re-review until "ready."
 
 ## Layout
-- `PATTERN.md` — the reusable kernel spec.
+- `PATTERN.md` — the reusable core spec.
 - `REVIEW.md` — the rigorous-review structure (rubric + failure-mode checklist + how to run it).
 - `USE-CASES.md` — the pattern re-targeted across domains, and each stage as a standalone skill.
 - `builds/{1,2,3}/SPEC.md` — per-skill goal, scope, definition-of-done.
-- `shared/` — reusable kernel components: the guard/gate hooks, the review gate, the SKILL template.
+- `shared/` — reusable core components: the guard/gate hooks, the review gate, the SKILL template.

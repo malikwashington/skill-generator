@@ -1,7 +1,7 @@
 # The Guard-Hook Layer — design note
 
 *A candidate "proven extension" for PATTERN.md. Optional, opt-in, portable across both
-deployments (shipped skills + the job-search source). Not part of the minimal kernel.*
+deployments (shipped skills + the job-search source). Not part of the minimal core.*
 
 > **Build status (this session):** guard.py + guard.config.json + test_guards.py + README
 > built and **22/22 offline checks green**; real PreToolUse JSON I/O smoke-verified
@@ -36,7 +36,7 @@ a live Claude Code session.
 
 **Non-goals.**
 - Not a replacement for any in-script check (those are stronger than RCA's already).
-- Not part of the portable kernel — hooks live in `settings.json`, which only fires in a
+- Not part of the portable core — hooks live in `settings.json`, which only fires in a
   CC session. Under an API/VM judge the hook is absent; the in-script checks still hold.
   → ships as an **optional module**, exactly like the other proven extensions.
 - v1 covers the highest-leverage guard (**block auto-send/submit**); the state-inspecting
