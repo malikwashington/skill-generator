@@ -54,7 +54,7 @@ EXCLUDE_DIRS = {"reviews", "__pycache__", ".git"}   # skill-discovery prune (pre
 # one of those names NESTED deeper (e.g. lib/reviews/loader.py) is real content and MUST be
 # hashed. Excluding them at any depth let post-attestation edits under a nested 'reviews/' go
 # undetected — a hole that defeats the whole drift guarantee.
-_HASH_PRUNE_ANYWHERE = {"__pycache__", ".git"}
+_HASH_PRUNE_ANYWHERE = {"__pycache__", ".pytest_cache", ".git"}
 _HASH_PRUNE_ROOT = {"reviews"}
 _HASH_SKIP_FILES_ROOT = {ATTEST_NAME, HISTORY_NAME}
 

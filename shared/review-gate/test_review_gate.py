@@ -221,7 +221,9 @@ def main():
         os.makedirs(os.path.join(s3, "reviews"), exist_ok=True)
         with open(os.path.join(s3, "reviews", "r1.md"), "w") as f: f.write("log")
         with open(os.path.join(s3, "junk.pyc"), "w") as f: f.write("x")
-        check("hash ignores attestation/reviews/pyc", rg.compute_artifact_hash(s3), h_clean)
+        os.makedirs(os.path.join(s3, ".pytest_cache", "v"), exist_ok=True)
+        with open(os.path.join(s3, ".pytest_cache", "v", "cache"), "w") as f: f.write("noise")
+        check("hash ignores attestation/reviews/pyc/pytest_cache", rg.compute_artifact_hash(s3), h_clean)
 
         # ── Hash: 'reviews' is excluded ONLY at the skill root — a NESTED reviews/ dir or a
         #    nested attestation-named file is real content and MUST be hashed (else a file under
