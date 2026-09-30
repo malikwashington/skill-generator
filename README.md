@@ -1,13 +1,19 @@
 # skill-generator
 
-A harness for building **&mdash; and hardening &mdash; LLM-judgment pipelines you can trust** as
+[![View the system map](https://img.shields.io/badge/%F0%9F%97%BA%EF%B8%8F_VIEW_THE_SYSTEM_MAP-open_live_page-2ea44f?style=for-the-badge)](https://malikwashington.github.io/skill-generator/)
+[![tailor-artifacts](https://img.shields.io/badge/skill-tailor--artifacts-blue?style=for-the-badge)](https://github.com/malikwashington/tailor-artifacts)
+[![lna](https://img.shields.io/badge/skill-lna-blue?style=for-the-badge)](https://github.com/malikwashington/lna)
+
+### 👉 [**Start here: see the full pipeline on the system map →**](https://malikwashington.github.io/skill-generator/)
+
+A harness for building **and hardening LLM-judgment pipelines you can trust** as
 self-contained Claude Code skills. Deterministic code owns state and safety; LLM judges make the fuzzy calls behind a
 validated JSON contract; and a skill **can't ship until it passes a code-enforced, hash-keyed
 adversarial review** — governance the code enforces, not a prose "please review first." The skills
 built this way tailor an artifact per target or decide what to act on next, always with a human in
 the loop before any consequential action.
 
-[The system map] (https://malikwashington.github.io/skill-generator/) &nbsp;·&nbsp; a visual overview of the full private pipeline these skills were spun out of. Capability-by-capability detail in [USE-CASES.md](USE-CASES.md).
+**[Open the system map](https://malikwashington.github.io/skill-generator/)** — a visual overview of the full private pipeline these skills were spun out of. Capability-by-capability detail is in [USE-CASES.md](USE-CASES.md).
 
 **What ships in *this* repo is the governance** — the [review gate](shared/review-gate/) and the
 [fail-closed guards](shared/hooks/) — plus the *worklist pattern* it enforces ([PATTERN.md](PATTERN.md)).
@@ -25,6 +31,17 @@ judgment pipeline or harden an inherited one — it's the same governance either
 I built this to run entirely on my Claude Code subscription and without incurring additional costs:
 the shipped skills judge with Claude Code subagents rather than a billable Anthropic API key, so a
 full run adds nothing to my bill.
+
+## Quick links
+
+| | |
+|---|---|
+| 🗺️ **[System map](https://malikwashington.github.io/skill-generator/)** | Visual overview of the full 25-capability pipeline |
+| ✍️ **[tailor-artifacts](https://github.com/malikwashington/tailor-artifacts)** | One genuinely personalized artifact per target |
+| 🎯 **[lna](https://github.com/malikwashington/lna)** | Likelihood / next-action decision layer |
+| 📐 **[PATTERN.md](PATTERN.md)** | The worklist pattern spec |
+| 🔍 **[REVIEW.md](REVIEW.md)** | The adversarial review methodology |
+| 🧩 **[USE-CASES.md](USE-CASES.md)** | The pattern across domains |
 
 ## The core: the worklist pattern
 
@@ -50,7 +67,7 @@ This pattern wasn't designed in the abstract — it was refined over months buil
 private pipeline on my own data: a job-search system that discovers roles across a dozen
 applicant-tracking systems, scores each against a deep profile, grounds every tailored claim to
 its source, composes a one-page résumé, and decides which single move most raises the odds of an
-interview. The three public skills below were spun out of that system. The philosophy is what
+interview. The public skills below were spun out of that system. The philosophy is what
 building it taught me:
 
 - **Code owns state and safety; judges own the fuzzy calls.** Deterministic code does all I/O,
@@ -69,17 +86,19 @@ building it taught me:
 That pipeline is **25 capabilities** across a trust spine and seven phases — and it's a loop, not
 a line: the gaps it surfaces fold back into the profile the whole system judges against, so each
 cycle compounds. Three are the public, standalone repos below; the rest run privately on my own
-data. A visual **[system map](https://malikwashington.github.io/skill-generator/)**, and the full
+data.
+
+👉 **[See it on the system map](https://malikwashington.github.io/skill-generator/)**, and find the full
 capability-by-capability detail in **[USE-CASES.md](USE-CASES.md)**.
 
 | phase | capabilities | public repo |
 |---|---|---|
-| **Trust spine** | review gate + fail-closed guards · provenance (source entailment) · confined judges · validate + run-average | **skill-generator** |
+| **Trust spine** | review gate + fail-closed guards · provenance (source entailment) · confined judges · validate + run-average | **[skill-generator](https://github.com/malikwashington/skill-generator)** |
 | **01 · Discover** | 11-ATS pull · seed→resolve→firehose · source-independent dedup · de-listing + dead-board cache | — |
 | **02 · Score** | interpretive 4-dimension fit · 3× run-averaging + disagreement flags · comp + near-miss gates · false-negative audit | — |
 | **03 · Ground** | source entailment · grounded coverage map | — |
-| **04 · Generate** | per-target tailoring · compose (impact / completeness / readability) · fill-to-page · critique + blind screen | **tailor-artifacts** |
-| **05 · Decide** | interview likelihood · next-action by leverage | **lna** |
+| **04 · Generate** | per-target tailoring · compose (impact / completeness / readability) · fill-to-page · critique + blind screen | **[tailor-artifacts](https://github.com/malikwashington/tailor-artifacts)** |
+| **05 · Decide** | interview likelihood · next-action by leverage | **[lna](https://github.com/malikwashington/lna)** |
 | **06 · Track** | durable records · dashboard projections · time-based triggers | — |
 | **07 · Learn** | gaps loop · claimed-vs-demonstrated — *surfaced demand splits into flesh-out-the-profile or a growth target; either way it folds back in* | — |
 
@@ -138,3 +157,7 @@ Skills built with this factory, each a standalone repo you can run:
   and `4-rca-tool/` (a pointer README — that build's docs travel with its code).
 - `shared/` — reusable core components: the guard/gate hooks, the review gate, the SKILL template.
 - `CLAUDE.md` — working conventions for building a skill in this repo.
+
+---
+
+### 🗺️ [Open the system map →](https://malikwashington.github.io/skill-generator/)
