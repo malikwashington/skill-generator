@@ -7,7 +7,7 @@ adversarial review** — governance the code enforces, not a prose "please revie
 built this way tailor an artifact per target or decide what to act on next, always with a human in
 the loop before any consequential action.
 
-[The system map →](https://malikwashington.github.io/skill-generator/)** &nbsp;·&nbsp; a visual overview of the full private pipeline these skills were spun out of. Capability-by-capability detail in [USE-CASES.md](USE-CASES.md).
+[The system map (https://malikwashington.github.io/skill-generator/) &nbsp;·&nbsp; a visual overview of the full private pipeline these skills were spun out of. Capability-by-capability detail in [USE-CASES.md](USE-CASES.md).
 
 **What ships in *this* repo is the governance** — the [review gate](shared/review-gate/) and the
 [fail-closed guards](shared/hooks/) — plus the *worklist pattern* it enforces ([PATTERN.md](PATTERN.md)).
